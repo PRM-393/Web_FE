@@ -1,0 +1,79 @@
+// Kiem tra du lieu nhap tren form (Form + TextFormField.validator). May chu van kiem tra lai (NFR-SEC-03).
+// Ham tra ve null khi hop le, nguoc lai tra ve thong bao loi tieng Viet.
+
+final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+String? validateEmail(String? value) {
+  final v = value?.trim() ?? '';
+  if (v.isEmpty) return 'Vui lòng nhập email';
+  if (!_emailPattern.hasMatch(v)) return 'Email không hợp lệ';
+  return null;
+}
+
+String? validatePassword(String? value) {
+  if (value == null || value.isEmpty) return 'Vui lòng nhập mật khẩu';
+  if (value.length < 6) return 'Mật khẩu tối thiểu 6 ký tự';
+  return null;
+}
+
+String? validateRequired(String? value, String field) =>
+    (value == null || value.trim().isEmpty) ? 'Vui lòng nhập $field' : null;
+
+// Tien VND la so nguyen (CON-06); cho phep nguoi dung go dau cham / phay ngan cach hang nghin
+int? parseMoney(String? value) {
+  final digits = (value ?? '').replaceAll(RegExp(r'[.,\s₫]'), '');
+  if (digits.isEmpty) return null;
+  return int.tryParse(digits);
+}
+
+String? validateMoney(String? value, String field, {bool allowZero = true}) {
+  final amount = parseMoney(value);
+  if (amount == null) return 'Vui lòng nhập $field hợp lệ';
+  if (amount < 0 || (!allowZero && amount == 0)) return '$field phải lớn hơn 0';
+  return null;
+}
+
+String? validatePositiveInt(String? value, String field) {
+  final n = int.tryParse(value?.trim() ?? '');
+  if (n == null || n < 1) return '$field phải là số nguyên từ 1 trở lên';
+  return null;
+}
+
+// OTP su dung voucher gom dung 6 chu so (FR-REDEEM-06)
+String? validateRedeemOtp(String? value) {
+  final v = value?.trim() ?? '';
+  if (!RegExp(r'^\d{6}$').hasMatch(v)) return 'Mã OTP gồm 6 chữ số';
+  return null;
+}
+
+String? validateLatitude(String? value) {
+  final v = double.tryParse(value?.trim() ?? '');
+  if (v == null || v < -90 || v > 90) return 'Vĩ độ từ -90 đến 90';
+  return null;
+}
+
+String? validateLongitude(String? value) {
+  final v = double.tryParse(value?.trim() ?? '');
+  if (v == null || v < -180 || v > 180) return 'Kinh độ từ -180 đến 180';
+  return null;
+}
+
+// Rang buoc giua cac truong cua chien dich: DC-10 / BR-21 (ngay ban, han dung), FR-CAMP-03 / DC-07 (chi nhanh)
+const minExpireAfterSaleEnd = Duration(days: 10);
+
+String? validateCampaignRules({
+  required int salePrice,
+  required int faceValue,
+  required DateTime saleStartAt,
+  required DateTime saleEndAt,
+  required DateTime voucherExpireAt,
+  required int storeCount,
+}) {
+  if (salePrice > faceValue) return 'Giá bán không được lớn hơn giá trị voucher';
+  if (!saleStartAt.isBefore(saleEndAt)) return 'Ngày kết thúc bán phải sau ngày bắt đầu bán';
+  if (voucherExpireAt.isBefore(saleEndAt.add(minExpireAfterSaleEnd))) {
+    return 'Hạn sử dụng phải sau ngày kết thúc bán ít nhất 10 ngày';
+  }
+  if (storeCount == 0) return 'Chọn ít nhất một chi nhánh áp dụng';
+  return null;
+}
