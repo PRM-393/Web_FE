@@ -111,6 +111,8 @@ class StatusChip extends StatelessWidget {
     'PENDING': 'Chờ duyệt',
     'APPROVED': 'Đã duyệt',
     'PUBLISHED': 'Đang bán',
+    'SOLD_OUT': 'Hết hàng',
+    'SUSPENDED': 'Bị đình chỉ',
     'PAUSED': 'Tạm dừng',
     'ENDED': 'Đã kết thúc',
     'REJECTED': 'Bị từ chối',
@@ -123,7 +125,7 @@ class StatusChip extends StatelessWidget {
   static Color colorOf(String status) => switch (status) {
         'APPROVED' || 'PUBLISHED' || 'PAID' || 'ACTIVE' => AppColors.success,
         'PENDING' || 'MANUAL_PENDING' => AppColors.secondary,
-        'REJECTED' || 'ENDED' || 'INACTIVE' => AppColors.danger,
+        'REJECTED' || 'ENDED' || 'INACTIVE' || 'SUSPENDED' || 'SOLD_OUT' => AppColors.danger,
         _ => AppColors.textSecondary,
       };
 

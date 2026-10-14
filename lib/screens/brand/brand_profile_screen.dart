@@ -53,6 +53,11 @@ class _BrandInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     final (icon, color, note) = switch (brand.status) {
       BrandStatus.approved => (Icons.verified, AppColors.success, 'Hồ sơ đã được duyệt. Bạn có thể gửi duyệt chiến dịch.'),
+      BrandStatus.suspended => (
+          Icons.gpp_bad_outlined,
+          AppColors.danger,
+          'Thương hiệu đang bị đình chỉ: các chiến dịch đang bán đã tạm dừng, không gửi duyệt được chiến dịch mới (FR-BRAND-09).'
+        ),
       BrandStatus.rejected => (
           Icons.cancel_outlined,
           AppColors.danger,

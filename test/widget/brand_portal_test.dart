@@ -10,7 +10,7 @@ Map<String, dynamic> campaign(String id, String status) => {
       'id': id,
       'brandId': 'b1',
       'title': 'Chiến dịch $id',
-      'voucherType': 'DISCOUNT_CODE',
+      'voucherType': 'PREPAID',
       'salePrice': '50000',
       'faceValue': '100000',
       'totalQuantity': 100,
@@ -149,6 +149,34 @@ void main() {
     // Ngay giu nguyen theo gio Viet Nam: 01/10 00:00 (UTC+7) = 30/09 17:00 UTC
     expect(body['saleStartAt'], '2026-09-30T17:00:00.000Z');
     expect(find.text('Chiến dịch voucher'), findsOneWidget, reason: 'luu xong quay ve danh sach');
+  });
+
+  testWidgets('ma giam % bat buoc muc giam toi da, du thi gui dung truong FR-CAMP-12', (tester) async {
+    stubBrand();
+    backend.on('GET', '/campaigns/brand/b1', (_) => []);
+    backend.on('PATCH', '/campaigns/D', (_) => campaign('D', 'DRAFT'));
+    final draft = VoucherCampaign.fromJson({
+      ...campaign('D', 'DRAFT'),
+      'soldQuantity': 0,
+      'voucherType': 'DISCOUNT',
+      'discountType': 'PERCENT',
+      'discountValue': '20',
+    });
+    await start(tester);
+    tester.state<NavigatorState>(find.byType(Navigator).first).pushNamed(AppRoutes.brandCampaignForm, arguments: draft);
+    await tester.pumpAndSettle();
+
+    await tapVisible(tester, find.byKey(const Key('campaign-save')));
+    expect(find.textContaining('mức giảm tối đa'), findsOneWidget);
+    expect(backend.called('PATCH', '/campaigns/D'), isFalse);
+
+    await tester.enterText(find.widgetWithText(TextFormField, 'Giảm tối đa (VND, bắt buộc khi giảm %)'), '15.000');
+    await tapVisible(tester, find.byKey(const Key('campaign-save')));
+    final body = backend.bodyOf('PATCH', '/campaigns/D');
+    expect(body['voucherType'], 'DISCOUNT');
+    expect(body['discountType'], 'PERCENT');
+    expect(body['discountValue'], 20);
+    expect(body['maxDiscount'], 15000);
   });
 
   testWidgets('them nhan vien gan vao chi nhanh (FR-BRAND-05)', (tester) async {

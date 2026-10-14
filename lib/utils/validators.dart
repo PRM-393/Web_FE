@@ -61,6 +61,7 @@ String? validateLongitude(String? value) {
 // Rang buoc giua cac truong cua chien dich: DC-10 / BR-21 (ngay ban, han dung), FR-CAMP-03 / DC-07 (chi nhanh)
 const minExpireAfterSaleEnd = Duration(days: 10);
 
+// FR-CAMP-12: truong gia tri theo loai voucher (voucherType null = chi kiem tra chung)
 String? validateCampaignRules({
   required int salePrice,
   required int faceValue,
@@ -68,8 +69,28 @@ String? validateCampaignRules({
   required DateTime saleEndAt,
   required DateTime voucherExpireAt,
   required int storeCount,
+  String? voucherType,
+  String? discountType,
+  int? discountValue,
+  int? maxDiscount,
+  String? comboItems,
 }) {
+  if (salePrice <= 0) return 'Giá bán phải lớn hơn 0';
+  if (voucherType == 'PREPAID' && faceValue <= salePrice) {
+    return 'Voucher mệnh giá phải có giá trị lớn hơn giá bán';
+  }
   if (salePrice > faceValue) return 'Giá bán không được lớn hơn giá trị voucher';
+  if (voucherType == 'DISCOUNT') {
+    if (discountType == null || discountValue == null || discountValue <= 0) {
+      return 'Mã giảm giá cần chọn kiểu giảm và nhập giá trị giảm';
+    }
+    if (discountType == 'PERCENT' && (discountValue > 100 || maxDiscount == null || maxDiscount <= 0)) {
+      return 'Giảm theo phần trăm cần giá trị từ 1 đến 100 và mức giảm tối đa';
+    }
+  }
+  if (voucherType == 'COMBO' && (comboItems == null || comboItems.trim().isEmpty)) {
+    return 'Combo cần mô tả nội dung gói';
+  }
   if (!saleStartAt.isBefore(saleEndAt)) return 'Ngày kết thúc bán phải sau ngày bắt đầu bán';
   if (voucherExpireAt.isBefore(saleEndAt.add(minExpireAfterSaleEnd))) {
     return 'Hạn sử dụng phải sau ngày kết thúc bán ít nhất 10 ngày';

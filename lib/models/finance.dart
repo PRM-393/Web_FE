@@ -8,7 +8,7 @@ class Settlement {
     required this.periodStart,
     required this.periodEnd,
     required this.grossRevenue,
-    required this.commissionRate,
+    required this.voucherCount,
     required this.commissionAmount,
     required this.payableAmount,
     required this.status,
@@ -22,7 +22,7 @@ class Settlement {
   final DateTime periodStart;
   final DateTime periodEnd;
   final int grossRevenue;
-  final double commissionRate;
+  final int voucherCount;
   final int commissionAmount;
   final int payableAmount;
   final String status;
@@ -38,7 +38,7 @@ class Settlement {
         periodStart: asDate(json['periodStart']),
         periodEnd: asDate(json['periodEnd']),
         grossRevenue: asInt(json['grossRevenue']),
-        commissionRate: asDouble(json['commissionRate']),
+        voucherCount: asInt(json['voucherCount']),
         commissionAmount: asInt(json['commissionAmount']),
         payableAmount: asInt(json['payableAmount']),
         status: json['status'] as String? ?? 'PENDING',

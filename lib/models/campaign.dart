@@ -1,6 +1,6 @@
 import 'json_utils.dart';
 
-// Vong doi chien dich - SRS muc 6: DRAFT -> PENDING -> APPROVED -> PUBLISHED <-> PAUSED -> ENDED
+// Vong doi chien dich - SRS 6.1: DRAFT -> PENDING -> APPROVED -> PUBLISHED <-> PAUSED / SOLD_OUT -> ENDED
 class CampaignStatus {
   CampaignStatus._();
 
@@ -8,6 +8,7 @@ class CampaignStatus {
   static const pending = 'PENDING';
   static const approved = 'APPROVED';
   static const published = 'PUBLISHED';
+  static const soldOut = 'SOLD_OUT';
   static const paused = 'PAUSED';
   static const ended = 'ENDED';
 }
@@ -16,15 +17,25 @@ class CampaignStatus {
 class VoucherType {
   VoucherType._();
 
-  static const discountCode = 'DISCOUNT_CODE';
-  static const prepaidValue = 'PREPAID_VALUE';
+  static const discount = 'DISCOUNT';
+  static const prepaid = 'PREPAID';
   static const combo = 'COMBO';
 
   static const labels = {
-    discountCode: 'Mã giảm giá',
-    prepaidValue: 'Voucher mệnh giá trả trước',
+    discount: 'Mã giảm giá',
+    prepaid: 'Voucher mệnh giá trả trước',
     combo: 'Combo / gói dịch vụ',
   };
+}
+
+// Kieu giam cua ma giam gia (FR-CAMP-12)
+class DiscountType {
+  DiscountType._();
+
+  static const amount = 'AMOUNT';
+  static const percent = 'PERCENT';
+
+  static const labels = {amount: 'Giảm theo số tiền', percent: 'Giảm theo phần trăm'};
 }
 
 class VoucherCampaign {
@@ -46,7 +57,11 @@ class VoucherCampaign {
     this.image,
     this.description,
     this.terms,
-    this.discountPercent,
+    this.categoryId,
+    this.discountType,
+    this.discountValue,
+    this.maxDiscount,
+    this.comboItems,
     this.rejectReason,
   });
 
@@ -67,7 +82,11 @@ class VoucherCampaign {
   final String? image;
   final String? description;
   final String? terms;
-  final double? discountPercent;
+  final String? categoryId;
+  final String? discountType;
+  final int? discountValue;
+  final int? maxDiscount;
+  final String? comboItems;
   final String? rejectReason;
 
   int get remaining => totalQuantity - soldQuantity - reservedQuantity;
@@ -82,7 +101,7 @@ class VoucherCampaign {
         id: json['id'] as String,
         brandId: json['brandId'] as String? ?? '',
         title: json['title'] as String? ?? '',
-        voucherType: json['voucherType'] as String? ?? VoucherType.discountCode,
+        voucherType: json['voucherType'] as String? ?? VoucherType.discount,
         salePrice: asDouble(json['salePrice']),
         faceValue: asDouble(json['faceValue']),
         totalQuantity: asInt(json['totalQuantity']),
@@ -96,7 +115,11 @@ class VoucherCampaign {
         image: json['image'] as String?,
         description: json['description'] as String?,
         terms: json['terms'] as String?,
-        discountPercent: asDoubleOrNull(json['discountPercent']),
+        categoryId: json['categoryId'] as String?,
+        discountType: json['discountType'] as String?,
+        discountValue: json['discountValue'] == null ? null : asInt(json['discountValue']),
+        maxDiscount: json['maxDiscount'] == null ? null : asInt(json['maxDiscount']),
+        comboItems: json['comboItems'] as String?,
         rejectReason: json['rejectReason'] as String?,
       );
 }
@@ -117,7 +140,10 @@ class CampaignDraft {
     this.image,
     this.description,
     this.terms,
-    this.discountPercent,
+    this.discountType,
+    this.discountValue,
+    this.maxDiscount,
+    this.comboItems,
   });
 
   final String title;
@@ -133,7 +159,10 @@ class CampaignDraft {
   final String? image;
   final String? description;
   final String? terms;
-  final double? discountPercent;
+  final String? discountType;
+  final int? discountValue;
+  final int? maxDiscount;
+  final String? comboItems;
 
   // Thoi gian gui len may chu theo UTC (CON-05); includeStores=false khi sua vi UpdateCampaignDto khong nhan storeIds
   Map<String, dynamic> toJson({bool includeStores = true}) => {
@@ -150,6 +179,9 @@ class CampaignDraft {
         if (image != null && image!.isNotEmpty) 'image': image,
         if (description != null && description!.isNotEmpty) 'description': description,
         if (terms != null && terms!.isNotEmpty) 'terms': terms,
-        if (discountPercent != null) 'discountPercent': discountPercent,
+        if (discountType != null) 'discountType': discountType,
+        if (discountValue != null) 'discountValue': discountValue,
+        if (maxDiscount != null) 'maxDiscount': maxDiscount,
+        if (comboItems != null && comboItems!.isNotEmpty) 'comboItems': comboItems,
       };
 }

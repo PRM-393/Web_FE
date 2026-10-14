@@ -7,6 +7,7 @@ class BrandStatus {
   static const pending = 'PENDING';
   static const approved = 'APPROVED';
   static const rejected = 'REJECTED';
+  static const suspended = 'SUSPENDED';
 }
 
 // Ho so thuong hieu (FR-BRAND-01..03)

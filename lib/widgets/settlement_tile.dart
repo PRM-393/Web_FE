@@ -37,7 +37,8 @@ class SettlementTile extends StatelessWidget {
               runSpacing: AppSpacing.xs,
               children: [
                 Text('Doanh thu gộp: ${formatVnd(s.grossRevenue)}'),
-                Text('Hoa hồng (${formatPercent(s.commissionRate)}): ${formatVnd(s.commissionAmount)}'),
+                Text('${s.voucherCount} voucher'),
+                Text('Hoa hồng: ${formatVnd(s.commissionAmount)}'),
                 Text('Thực nhận: ${formatVnd(s.payableAmount)}', style: const TextStyle(fontWeight: FontWeight.w600)),
                 if (s.isPaid && s.paidAt != null) Text('Chi trả ${formatDateTime(s.paidAt!)} · Mã GD ${s.bankTxnRef ?? '—'}'),
               ],

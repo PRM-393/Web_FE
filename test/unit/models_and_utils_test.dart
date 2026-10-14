@@ -33,7 +33,7 @@ void main() {
         'id': 'c1',
         'brandId': 'b1',
         'title': 'Giảm 50k',
-        'voucherType': 'PREPAID_VALUE',
+        'voucherType': 'PREPAID',
         'salePrice': '80000.00',
         'faceValue': '100000',
         'totalQuantity': 100,
@@ -61,13 +61,13 @@ void main() {
         'periodStart': '2026-09-01T00:00:00.000Z',
         'periodEnd': '2026-09-30T00:00:00.000Z',
         'grossRevenue': '1000000',
-        'commissionRate': '0.1000',
+        'voucherCount': 12,
         'commissionAmount': '100000',
         'payableAmount': '900000',
         'status': 'PENDING',
       });
       expect(s.grossRevenue, 1000000);
-      expect(s.commissionRate, 0.1);
+      expect(s.voucherCount, 12);
       expect(s.payableAmount, 900000);
       expect(s.isPaid, isFalse);
     });
@@ -158,6 +158,45 @@ void main() {
       test('han dung chua du 10 ngay sau ket thuc ban',
           () => expect(check(x: end.add(const Duration(days: 9))), contains('10 ngày')));
       test('chua chon chi nhanh (DC-07)', () => expect(check(stores: 0), contains('chi nhánh')));
+      test('gia ban phai lon hon 0', () => expect(check(sale: 0), contains('lớn hơn 0')));
+    });
+
+    group('FR-CAMP-12 truong gia tri theo loai voucher', () {
+      final s = DateTime.utc(2026, 10, 1);
+      final e = DateTime.utc(2026, 10, 31);
+      final x = DateTime.utc(2026, 11, 30);
+      String? check(String type, {int sale = 50000, int face = 100000, String? dt, int? dv, int? max, String? combo}) =>
+          validateCampaignRules(
+            salePrice: sale,
+            faceValue: face,
+            saleStartAt: s,
+            saleEndAt: e,
+            voucherExpireAt: x,
+            storeCount: 1,
+            voucherType: type,
+            discountType: dt,
+            discountValue: dv,
+            maxDiscount: max,
+            comboItems: combo,
+          );
+
+      test('PREPAID: gia tri phai lon hon gia ban', () {
+        expect(check('PREPAID', sale: 100000, face: 100000), contains('mệnh giá'));
+        expect(check('PREPAID'), isNull);
+      });
+      test('DISCOUNT: bat buoc kieu giam va gia tri', () {
+        expect(check('DISCOUNT'), contains('kiểu giảm'));
+        expect(check('DISCOUNT', dt: 'AMOUNT', dv: 20000), isNull);
+      });
+      test('DISCOUNT theo %: 1..100 va co muc giam toi da', () {
+        expect(check('DISCOUNT', dt: 'PERCENT', dv: 20), contains('tối đa'));
+        expect(check('DISCOUNT', dt: 'PERCENT', dv: 120, max: 10000), contains('1 đến 100'));
+        expect(check('DISCOUNT', dt: 'PERCENT', dv: 20, max: 15000), isNull);
+      });
+      test('COMBO: bat buoc mo ta goi', () {
+        expect(check('COMBO'), contains('Combo'));
+        expect(check('COMBO', combo: '1 banh mi + 1 ca phe'), isNull);
+      });
     });
   });
 }
