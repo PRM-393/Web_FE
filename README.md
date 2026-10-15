@@ -16,16 +16,19 @@ Tài liệu đặc tả: `Document/SRS-Voucher-Platform.docx` (v1.1). Kiến tr�
 
 ## Chạy dự án
 
-Yêu cầu: Flutter SDK 3.x, Chrome, máy chủ `Web_BE` đang chạy ở cổng 3000.
+Yêu cầu: Flutter SDK 3.47.x và Chrome. **Không cần chạy BE hay cài CSDL**: app mặc định gọi BE đã deploy trên Render
+(`lib/config/env.dart`).
 
 ```bash
 flutter pub get
-flutter run -d chrome --web-port 5173 --dart-define=API_BASE_URL=http://localhost:3000/api
+flutter run -d chrome --web-port 5173
 ```
 
-- Cổng `5173` trùng với `CORS_ORIGIN` mặc định trong `.env` của Web_BE. Nếu đổi cổng thì phải đổi cả `CORS_ORIGIN`.
+- Lần gọi đầu có thể mất 30–60 giây vì Render gói free đang "ngủ"; các lần sau nhanh bình thường.
+- Tài khoản mẫu (mật khẩu `Voucher@123`): `owner@highlands.local`, `staff@highlands.local`, `admin@voucher.local`.
+- Chạy với BE trên máy mình: thêm `--dart-define=API_BASE_URL=http://localhost:3000/api`. Giữ cổng `5173` cho khớp `CORS_ORIGIN`.
 - Camera chỉ hoạt động trên `localhost` hoặc HTTPS. Khi thử trên điện thoại qua mạng LAN, hãy dùng ô nhập OTP.
-- Không hard-code địa chỉ máy chủ trong mã nguồn (NFR-MNT-02).
+- Không hard-code địa chỉ máy chủ trong mã nguồn (NFR-MNT-02); đổi BE production thì sửa `Env.defaultBackend`.
 
 Kiểm tra trước khi tạo PR:
 
@@ -34,7 +37,18 @@ flutter analyze
 flutter test
 ```
 
-Bản triển khai: `flutter build web --release --dart-define=API_BASE_URL=<địa chỉ máy chủ>/api`. Kết quả nằm trong `build/web`.
+## Triển khai lên Vercel
+
+Cấu hình nằm sẵn trong repo, không phải chỉnh gì thêm:
+
+- `vercel.json`: Vercel chạy `scripts/vercel-install.sh` (tải Flutter 3.47.3, cùng bản với CI), rồi `scripts/vercel-build.sh`
+  (`flutter build web --release`), phục vụ thư mục `build/web`.
+- Lần đầu (trưởng nhóm làm một lần): vercel.com → Add New → Project → import repo **Web_FE**. Framework Preset để **Other**,
+  giữ nguyên các lệnh, bấm Deploy. Mỗi lần push lên `main` Vercel tự deploy lại; mỗi PR có link preview riêng.
+- Không bắt buộc: biến `API_BASE_URL` trong Vercel → Settings → Environment Variables để trỏ sang BE khác. Bỏ trống thì
+  dùng BE Render mặc định.
+- BE đã cho phép CORS từ mọi tên miền `*.vercel.app`, nên link production và preview đều gọi được API.
+- Build lần đầu mất khoảng 5–7 phút vì phải tải Flutter.
 
 ## Vai trò và màn hình
 

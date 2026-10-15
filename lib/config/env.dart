@@ -1,11 +1,13 @@
-// Cau hinh moi truong, truyen qua --dart-define khi chay/build (NFR-MNT-02: khong hard-code).
+// Cau hinh moi truong (NFR-MNT-02: khong hard-code dia chi trong tung man hinh).
+// Mac dinh tro toi BE da deploy tren Render nen ca nhom chay ngay khong can cau hinh:
+//   flutter run -d chrome --web-port 5173
+// Chay voi BE tren may minh thi truyen them:
 //   flutter run -d chrome --web-port 5173 --dart-define=API_BASE_URL=http://localhost:3000/api
-// Cong 5173 trung voi CORS_ORIGIN mac dinh trong .env cua Web_BE.
+// Doi BE production: sua defaultBackend duoi day (va bien API_BASE_URL tren Vercel neu co dat).
 class Env {
   Env._();
 
-  static const String apiBaseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://localhost:3000/api',
-  );
+  static const defaultBackend = 'https://voucher-platform-api.onrender.com/api';
+
+  static const String apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: defaultBackend);
 }
