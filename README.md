@@ -77,3 +77,14 @@ src/
 - Tich hop thu vien quet QR that trong `RedeemPage`.
 - Form tao chien dich day du (chon nhieu chi nhanh, loai voucher, upload anh).
 - Trang quan ly nhan vien cua hang (`StaffListPage`) con la stub.
+
+## Các thay đổi F02 và F14
+
+- `npm test`: kiểm thử refresh token đồng thời, lỗi refresh và trường hợp đăng xuất trong lúc refresh.
+- `/activate`: yêu cầu gửi lại liên kết hoặc đặt mật khẩu qua liên kết kích hoạt.
+- `/brand/reports`: lấy thương hiệu thật từ phiên, lọc chiến dịch/chi nhánh/ngày; hiển thị doanh thu sau hoàn, số đã dùng/hết hạn/hoàn và tỷ lệ sử dụng.
+- `/admin/dashboard`: giao dịch theo ngày, số liệu doanh thu/hoa hồng và liên kết các hàng đợi.
+- `/admin/refunds`: xem yêu cầu hoàn thủ công, đơn lệch số tiền và ghi nhận kết quả sau khi đã hoàn tại cổng thanh toán.
+- Web cửa hàng yêu cầu chọn chi nhánh làm việc trước khi redeem. Đăng xuất gọi API thu hồi phiên.
+- Cấu hình VITE_API_BASE_URL trỏ đến backend mới; giá trị mặc định là http://localhost:3000/api. Người dùng cần đăng nhập lại sau cập nhật backend.
+- Repo này vẫn là React. Các màn khách hàng (tìm kiếm, bản đồ, chi tiết voucher) thuộc repo Mobile_App chưa được cung cấp.

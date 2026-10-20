@@ -1,18 +1,9 @@
 const LABELS_VI: Record<string, string> = {
-  DRAFT: 'Nhap',
-  PENDING: 'Cho duyet',
-  APPROVED: 'Da duyet',
-  PUBLISHED: 'Dang ban',
-  PAUSED: 'Tam dung',
-  ENDED: 'Ket thuc',
-  REJECTED: 'Tu choi',
-  ACTIVE: 'Dang hieu luc',
-  USED: 'Da dung',
-  EXPIRED: 'Het han',
-  REFUNDED: 'Da hoan',
-  PAID: 'Da chi tra',
+  DRAFT: 'Bản nháp', PENDING: 'Chờ duyệt', APPROVED: 'Đã duyệt', PUBLISHED: 'Đang bán',
+  PAUSED: 'Tạm dừng', ENDED: 'Kết thúc', REJECTED: 'Từ chối', ACTIVE: 'Đang hoạt động',
+  INACTIVE: 'Ngừng hoạt động', USED: 'Đã sử dụng', EXPIRED: 'Hết hạn', REFUNDED: 'Đã hoàn tiền',
+  REFUND_PENDING: 'Đang chờ hoàn', PAID: 'Đã chi trả', SOLD_OUT: 'Hết hàng', SUSPENDED: 'Đình chỉ',
 };
-
 export function StatusBadge({ status }: { status: string }) {
-  return <span className={`badge badge-${status.toLowerCase()}`}>{LABELS_VI[status] ?? status}</span>;
+  return <span className={'badge badge-' + status.toLowerCase()}>{LABELS_VI[status] ?? status}</span>;
 }

@@ -1,9 +1,9 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import type { LoginResponse } from '@/types/auth';
 import { useAuthStore } from '@/store/auth.store';
 
-export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api',
-});
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api').replace(/\/$/, '');
+export const apiClient = axios.create({ baseURL: API_BASE_URL });
 
 // Gan JWT access token vao moi request - CON theo SRS 8.3 (Authorization: Bearer)
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
@@ -15,8 +15,7 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
-let isRefreshing = false;
-let pendingQueue: Array<() => void> = [];
+let refreshPromise: Promise<void> | null = null;
 
 // Tu dong lam moi access token khi het han (401), retry request that bai mot lan
 apiClient.interceptors.response.use(
@@ -24,8 +23,8 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
 
-    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
-      const { refreshToken, setSession, clearSession, user } = useAuthStore.getState();
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry && (!originalRequest.url?.startsWith('/auth/') || originalRequest.url === '/auth/logout' || originalRequest.url === '/auth/select-store')) {
+      const { refreshToken, setSession, clearSession } = useAuthStore.getState();
       if (!refreshToken) {
         clearSession();
         return Promise.reject(error);
@@ -33,27 +32,21 @@ apiClient.interceptors.response.use(
 
       originalRequest._retry = true;
 
-      if (isRefreshing) {
-        return new Promise((resolve) => {
-          pendingQueue.push(() => resolve(apiClient(originalRequest)));
-        });
-      }
-
-      isRefreshing = true;
       try {
-        const { data } = await axios.post(
-          `${import.meta.env.VITE_API_BASE_URL}/auth/refresh`,
-          { refreshToken },
-        );
-        setSession(user ?? data.user, { accessToken: data.accessToken, refreshToken: data.refreshToken });
-        pendingQueue.forEach((cb) => cb());
-        pendingQueue = [];
+        if (!refreshPromise) {
+          refreshPromise = axios.post<LoginResponse>(`${API_BASE_URL}/auth/refresh`, { refreshToken })
+            .then(({ data }) => {
+              // A late refresh must not restore a session after logout or another login.
+              if (useAuthStore.getState().refreshToken !== refreshToken) throw new Error('Phiên đăng nhập đã thay đổi.');
+              setSession(data.user, { accessToken: data.accessToken, refreshToken: data.refreshToken });
+            })
+            .finally(() => { refreshPromise = null; });
+        }
+        await refreshPromise;
         return apiClient(originalRequest);
       } catch (refreshError) {
-        clearSession();
+        if (useAuthStore.getState().refreshToken === refreshToken) clearSession();
         return Promise.reject(refreshError);
-      } finally {
-        isRefreshing = false;
       }
     }
 

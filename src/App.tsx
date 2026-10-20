@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { LoginPage } from '@/pages/auth/LoginPage';
+import { ActivatePage } from '@/pages/auth/ActivatePage';
 import { ForbiddenPage } from '@/pages/shared/ForbiddenPage';
 import { NotFoundPage } from '@/pages/shared/NotFoundPage';
 import { RequireRole } from '@/routes/RequireRole';
@@ -18,6 +19,7 @@ import { HistoryPage } from '@/pages/store/HistoryPage';
 
 import { AdminLayout } from '@/pages/admin/AdminLayout';
 import { DashboardPage } from '@/pages/admin/DashboardPage';
+import { RefundQueuePage } from '@/pages/admin/RefundQueuePage';
 import { BrandApprovalPage } from '@/pages/admin/BrandApprovalPage';
 import { CampaignApprovalPage } from '@/pages/admin/CampaignApprovalPage';
 import { SettlementAdminPage } from '@/pages/admin/SettlementAdminPage';
@@ -29,6 +31,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/activate" element={<ActivatePage />} />
       <Route path="/forbidden" element={<ForbiddenPage />} />
 
       <Route
@@ -71,6 +74,7 @@ export default function App() {
       >
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="refunds" element={<RefundQueuePage />} />
         <Route path="approvals/brands" element={<BrandApprovalPage />} />
         <Route path="approvals/campaigns" element={<CampaignApprovalPage />} />
         <Route path="settlements" element={<SettlementAdminPage />} />
