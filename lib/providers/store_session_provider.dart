@@ -38,8 +38,10 @@ class StoreSessionProvider extends ChangeNotifier {
     try {
       _stores = (await _service.myStores()).where((s) => s.active).toList();
       // Chi duoc gan mot chi nhanh thi chon luon
-      if (_stores.length == 1) _current = _stores.first;
-      if (_current != null && !_stores.any((s) => s.id == _current!.id)) _current = null;
+      if (_stores.length == 1) await selectStore(_stores.first);
+      if (_current != null && !_stores.any((s) => s.id == _current!.id)) {
+        _current = null;
+      }
     } catch (e) {
       _storesError = e.toString();
     } finally {
@@ -48,7 +50,9 @@ class StoreSessionProvider extends ChangeNotifier {
     }
   }
 
-  void selectStore(Store store) {
+  Future<void> selectStore(Store store) async {
+    // FR-AUTH-12: server binds the selected branch to this session.
+    await _service.selectStore(store.id);
     _current = store;
     clearResult();
   }
@@ -68,7 +72,12 @@ class StoreSessionProvider extends ChangeNotifier {
     _lastError = null;
     notifyListeners();
     try {
-      _lastResult = await _service.redeem(storeId: store.id, nonce: nonce, otpCode: otpCode, billAmount: billAmount);
+      _lastResult = await _service.redeem(
+        storeId: store.id,
+        nonce: nonce,
+        otpCode: otpCode,
+        billAmount: billAmount,
+      );
       await _reloadHistorySilently();
       return true;
     } catch (e) {

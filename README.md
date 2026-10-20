@@ -37,6 +37,16 @@ flutter analyze
 flutter test
 ```
 
+Luồng tích hợp với BE `feature/dat`:
+
+- Nhân viên chọn chi nhánh qua `POST /auth/select-store` trước khi xác nhận voucher.
+- Báo cáo thương hiệu lọc ngày thanh toán (giờ Việt Nam), chiến dịch và chi nhánh đã sử dụng.
+  Doanh thu hiển thị sau khi trừ hoàn tiền; tỷ lệ sử dụng lấy trực tiếp từ BE.
+- Dashboard quản trị có tổng giao dịch, tiền hoàn và doanh thu theo ngày.
+- Xác nhận hoàn tiền thủ công yêu cầu mã giao dịch `gatewayRefundId` sau khi đã chuyển tiền.
+- Mặc định vẫn dùng Render. Nếu Render chưa triển khai các API trên, chạy với
+  `--dart-define=API_BASE_URL=http://localhost:3000/api` và BE `feature/dat` trên máy.
+
 ## Triển khai lên Vercel
 
 Cấu hình nằm sẵn trong repo, không phải chỉnh gì thêm:
