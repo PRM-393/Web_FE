@@ -5,6 +5,7 @@ import 'providers/auth_provider.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/admin/brand_approval_screen.dart';
 import 'screens/admin/campaign_approval_screen.dart';
+import 'screens/admin/commission_config_screen.dart';
 import 'screens/admin/refund_admin_screen.dart';
 import 'screens/admin/settlement_admin_screen.dart';
 import 'screens/auth/login_screen.dart';
@@ -48,6 +49,7 @@ class AppRoutes {
   static const adminBrands = '/admin/brands';
   static const adminCampaigns = '/admin/campaigns';
   static const adminSettlements = '/admin/settlements';
+  static const adminCommission = '/admin/commission';
   static const adminRefunds = '/admin/refunds';
 
   // Trang chu theo vai tro sau khi dang nhap
@@ -113,6 +115,7 @@ class AppRoutes {
         adminBrands => const BrandApprovalScreen(),
         adminCampaigns => const CampaignApprovalScreen(),
         adminSettlements => const SettlementAdminScreen(),
+        adminCommission => const CommissionConfigScreen(),
         adminRefunds => const RefundAdminScreen(),
         _ => const NotFoundScreen(),
       };

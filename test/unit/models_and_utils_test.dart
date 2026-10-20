@@ -100,6 +100,8 @@ void main() {
     test('formatPercent', () {
       expect(formatPercent(0.1), '10%');
       expect(formatPercent(0.125), '12.5%');
+      expect(formatPercent(0.9999), '99.99%'); // khong lam tron thanh 100%
+      expect(formatPercent(0.075), '7.5%');
     });
 
     test('ngay chon tren form doi sang UTC theo UTC+7', () {
@@ -117,6 +119,32 @@ void main() {
       expect(validateEmail('owner@brand.vn'), isNull);
       expect(validatePassword('123'), isNotNull);
       expect(validatePassword('123456'), isNull);
+    });
+
+    // F13 - T3: ty le hoa hong nhap theo phan tram, may chu chi nhan 0 < rate < 1 (FR-SETTLE-01, BR-09)
+    test('ty le hoa hong phai lon hon 0% va nho hon 100%', () {
+      expect(validateCommissionPercent('0'), contains('lớn hơn 0%'));
+      expect(validateCommissionPercent('-5'), contains('lớn hơn 0%'));
+      expect(validateCommissionPercent('100'), contains('nhỏ hơn 100%'));
+      expect(validateCommissionPercent('150'), contains('nhỏ hơn 100%'));
+      expect(validateCommissionPercent(''), isNotNull);
+      expect(validateCommissionPercent('muoi'), isNotNull);
+      expect(validateCommissionPercent('10'), isNull);
+      expect(validateCommissionPercent('7,5'), isNull);
+      expect(validateCommissionPercent('99.99'), isNull);
+    });
+
+    test('ty le hoa hong toi da 2 chu so thap phan', () {
+      expect(validateCommissionPercent('7.555'), contains('thập phân'));
+      expect(validateCommissionPercent('7.55'), isNull);
+    });
+
+    // Chia cho 100 de lai sai so dau cham dong thi may chu se tu choi vi qua 4 chu so thap phan
+    test('doi phan tram sang ty le 0..1 khong de lai sai so', () {
+      expect(commissionPercentToRate(10), 0.1);
+      expect(commissionPercentToRate(7.5), 0.075);
+      expect(commissionPercentToRate(2.9), 0.029);
+      expect(commissionPercentToRate(99.99), 0.9999);
     });
 
     test('parseMoney chap nhan dau cham phan cach', () {

@@ -10,7 +10,8 @@ import '../../widgets/common.dart';
 import '../../widgets/portal_shell.dart';
 import '../../widgets/settlement_tile.dart';
 
-// UC-05, FR-SETTLE-01/03/07: cau hinh ty le hoa hong chung, chot doi soat thang truoc, danh dau da chi tra
+// UC-05, FR-SETTLE-03/07: chot doi soat thang truoc, danh dau da chi tra.
+// Cau hinh ty le hoa hong (FR-SETTLE-01) nam o man rieng: CommissionConfigScreen.
 class SettlementAdminScreen extends StatefulWidget {
   const SettlementAdminScreen({super.key});
 
@@ -19,7 +20,6 @@ class SettlementAdminScreen extends StatefulWidget {
 }
 
 class _SettlementAdminScreenState extends State<SettlementAdminScreen> {
-  final _rateController = TextEditingController();
   late Future<List<Settlement>> _future;
   bool _busy = false;
 
@@ -29,15 +29,6 @@ class _SettlementAdminScreenState extends State<SettlementAdminScreen> {
   void initState() {
     super.initState();
     _future = _service.settlements();
-    _service.commissionRate().then((rate) {
-      if (mounted) _rateController.text = (rate * 100).toStringAsFixed(rate * 100 % 1 == 0 ? 0 : 1);
-    }).catchError((_) {});
-  }
-
-  @override
-  void dispose() {
-    _rateController.dispose();
-    super.dispose();
   }
 
   void _reload() {
@@ -55,19 +46,6 @@ class _SettlementAdminScreenState extends State<SettlementAdminScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  // Nhap theo phan tram cho de doc, gui len may chu ty le 0..1 (BR-09)
-  Future<void> _saveRate() async {
-    final percent = double.tryParse(_rateController.text.trim().replaceAll(',', '.'));
-    if (percent == null || percent < 0 || percent > 100) {
-      showMessage(context, 'Tỷ lệ hoa hồng từ 0 đến 100%.', error: true);
-      return;
-    }
-    await _guard(() async {
-      await _service.setCommissionRate(percent / 100);
-      if (mounted) showMessage(context, 'Đã cập nhật tỷ lệ hoa hồng ${formatPercent(percent / 100)}.');
-    });
   }
 
   // Ky doi soat la thang lich truoc theo gio Viet Nam (BR-25)
@@ -108,41 +86,15 @@ class _SettlementAdminScreenState extends State<SettlementAdminScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             PageHeader(
-              title: 'Đối soát & hoa hồng',
-              actions: [IconButton(tooltip: 'Tải lại', onPressed: _reload, icon: const Icon(Icons.refresh))],
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.md),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  child: Wrap(
-                    spacing: AppSpacing.md,
-                    runSpacing: AppSpacing.md,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 200,
-                        child: TextField(
-                          controller: _rateController,
-                          decoration: const InputDecoration(labelText: 'Tỷ lệ hoa hồng', suffixText: '%'),
-                        ),
-                      ),
-                      FilledButton(
-                        style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-                        onPressed: _busy ? null : _saveRate,
-                        child: const Text('Lưu tỷ lệ'),
-                      ),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
-                        onPressed: _busy ? null : _runLastMonth,
-                        icon: const Icon(Icons.play_circle_outline),
-                        label: const Text('Chốt đối soát tháng trước'),
-                      ),
-                    ],
-                  ),
+              title: 'Đối soát',
+              actions: [
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : _runLastMonth,
+                  icon: const Icon(Icons.play_circle_outline),
+                  label: const Text('Chốt đối soát tháng trước'),
                 ),
-              ),
+                IconButton(tooltip: 'Tải lại', onPressed: _reload, icon: const Icon(Icons.refresh)),
+              ],
             ),
             Expanded(
               child: AsyncBody<List<Settlement>>(

@@ -142,11 +142,11 @@ class AdminService {
   Future<void> rejectCampaign(String id, String reason) =>
       _api.patch('/campaigns/$id/reject', body: {'reason': reason});
 
-  Future<double> commissionRate() async {
-    final json = await _api.get('/admin/commission-rate') as Map<String, dynamic>;
-    return asDouble(json['rate']);
-  }
+  // FR-SETTLE-01: ty le hoa hong chung kem lan thay doi gan nhat
+  Future<CommissionRateInfo> commissionRate() async =>
+      CommissionRateInfo.fromJson(await _api.get('/admin/commission-rate') as Map<String, dynamic>);
 
+  // rate la ty le 0..1 (man hinh nhap theo phan tram roi quy doi), may chu kiem lai 0 < rate < 1
   Future<void> setCommissionRate(double rate) => _api.post('/admin/commission-rate', body: {'rate': rate});
 
   Future<List<Settlement>> settlements() async => asList(await _api.get('/admin/settlements'), Settlement.fromJson);
