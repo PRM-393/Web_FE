@@ -35,7 +35,8 @@ const _adminNav = [
   PortalNavItem(AppRoutes.adminDashboard, 'Bảng điều khiển', Icons.dashboard_outlined),
   PortalNavItem(AppRoutes.adminBrands, 'Duyệt thương hiệu', Icons.verified_outlined),
   PortalNavItem(AppRoutes.adminCampaigns, 'Duyệt chiến dịch', Icons.fact_check_outlined),
-  PortalNavItem(AppRoutes.adminSettlements, 'Đối soát & hoa hồng', Icons.account_balance_outlined),
+  PortalNavItem(AppRoutes.adminSettlements, 'Đối soát', Icons.account_balance_outlined),
+  PortalNavItem(AppRoutes.adminCommission, 'Tỷ lệ hoa hồng', Icons.percent),
   PortalNavItem(AppRoutes.adminRefunds, 'Hoàn tiền thủ công', Icons.currency_exchange),
 ];
 

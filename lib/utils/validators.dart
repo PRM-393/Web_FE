@@ -46,6 +46,34 @@ String? validateRedeemOtp(String? value) {
   return null;
 }
 
+// FR-SETTLE-01 / BR-09: quan tri vien nhap ty le hoa hong theo phan tram cho de doc.
+// May chu luu ty le 0..1 va chi nhan khoang mo 0 < rate < 1, nen phan tram phai 0 < p < 100.
+// Gioi han 2 chu so thap phan de ty le gui len khong qua 4 chu so thap phan (DTO cua may chu).
+const maxCommissionPercentDecimals = 2;
+
+double? parseCommissionPercent(String? value) {
+  // Ban phim tieng Viet hay go dau phay lam dau thap phan
+  final text = (value ?? '').trim().replaceAll(',', '.');
+  if (text.isEmpty) return null;
+  return double.tryParse(text);
+}
+
+String? validateCommissionPercent(String? value) {
+  final percent = parseCommissionPercent(value);
+  if (percent == null) return 'Vui lòng nhập tỷ lệ hoa hồng, ví dụ 10';
+  if (percent <= 0) return 'Tỷ lệ hoa hồng phải lớn hơn 0%';
+  if (percent >= 100) return 'Tỷ lệ hoa hồng phải nhỏ hơn 100%';
+  final decimals = (value ?? '').trim().replaceAll(',', '.').split('.');
+  if (decimals.length > 1 && decimals[1].length > maxCommissionPercentDecimals) {
+    return 'Tỷ lệ hoa hồng tối đa $maxCommissionPercentDecimals chữ số thập phân';
+  }
+  return null;
+}
+
+// Phan tram tren form -> ty le 0..1 gui len may chu. Lam tron 4 chu so thap phan de
+// phep chia cho 100 khong de lai sai so dau cham dong khien may chu tu choi.
+double commissionPercentToRate(double percent) => double.parse((percent / 100).toStringAsFixed(4));
+
 String? validateLatitude(String? value) {
   final v = double.tryParse(value?.trim() ?? '');
   if (v == null || v < -90 || v > 90) return 'Vĩ độ từ -90 đến 90';

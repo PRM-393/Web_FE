@@ -14,8 +14,15 @@ final _date = DateFormat('dd/MM/yyyy');
 
 String formatDate(DateTime value) => _date.format(value.toUtc().add(const Duration(hours: 7)));
 
+// Phan tram -> chuoi gon: 10 -> "10", 7.5 -> "7.5", 99.99 -> "99.99".
+// Giu toi da 2 chu so thap phan de ty le hoa hong 99.99% khong bi lam tron thanh "100".
+String formatPercentValue(double percent) {
+  final text = percent.toStringAsFixed(2);
+  return text.contains('.') ? text.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '') : text;
+}
+
 // Ty le 0..1 -> "10%"
-String formatPercent(double rate) => '${(rate * 100).toStringAsFixed(rate * 100 % 1 == 0 ? 0 : 1)}%';
+String formatPercent(double rate) => '${formatPercentValue(rate * 100)}%';
 
 // BR-25: moc "ngay" tinh theo gio Viet Nam. Ngay chon tren form (khong co gio) doi sang thoi diem UTC.
 const _vnOffset = Duration(hours: 7);

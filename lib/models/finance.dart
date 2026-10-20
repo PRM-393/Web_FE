@@ -48,6 +48,28 @@ class Settlement {
       );
 }
 
+// Ty le hoa hong chung cua san + lan thay doi gan nhat (FR-SETTLE-01, NFR-SEC-07)
+class CommissionRateInfo {
+  const CommissionRateInfo({required this.rate, this.isDefault = false, this.updatedBy, this.updatedAt});
+
+  // Ty le 0..1, vd 0.1 = 10%
+  final double rate;
+
+  // true khi may chu dang dung ty le mac dinh vi chua ai cau hinh
+  final bool isDefault;
+  final String? updatedBy;
+  final DateTime? updatedAt;
+
+  double get percent => rate * 100;
+
+  factory CommissionRateInfo.fromJson(Map<String, dynamic> json) => CommissionRateInfo(
+        rate: asDouble(json['rate']),
+        isDefault: json['isDefault'] == true,
+        updatedBy: json['updatedBy'] as String?,
+        updatedAt: asDateOrNull(json['updatedAt']),
+      );
+}
+
 // Bao cao cua thuong hieu (FR-REPORT-01/02)
 class BrandReport {
   const BrandReport({required this.totalCampaigns, required this.totalVoucherSold, required this.totalRevenue});
