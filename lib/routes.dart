@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'models/campaign.dart';
+import 'screens/auth/account_recovery_screen.dart';
+import 'screens/admin/category_admin_screen.dart';
 import 'providers/auth_provider.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/admin/brand_approval_screen.dart';
@@ -30,6 +32,9 @@ class AppRoutes {
 
   static const root = '/';
   static const login = '/login';
+  static const activate = '/activate';
+  static const resetPassword = '/reset-password';
+  static const adminCategories = '/admin/categories';
   static const forbidden = '/forbidden';
 
   static const brandCampaigns = '/brand/campaigns';
@@ -72,11 +77,14 @@ class AppRoutes {
       Navigator.pushReplacementNamed(context, name, arguments: arguments);
 
   static Route<dynamic> onGenerateRoute(RouteSettings settings, AuthProvider auth) {
-    final name = settings.name ?? root;
+    final uri = Uri.parse(settings.name ?? root);
+    final name = uri.path;
     final role = requiredRole(name);
 
     final Widget page;
-    if (name == root) {
+    if (name == activate || name == resetPassword) {
+      page = AccountRecoveryScreen(activation: name == activate, email: uri.queryParameters['email'] ?? '', token: uri.queryParameters['token']);
+    } else if (name == root) {
       page = auth.isLoggedIn ? _pageFor(homeOf(auth.role), null) : const LoginScreen();
     } else if (name == login) {
       page = auth.isLoggedIn ? _pageFor(homeOf(auth.role), null) : const LoginScreen();
@@ -112,6 +120,7 @@ class AppRoutes {
         storeRedeem => const RedeemScreen(),
         storeHistory => const RedeemHistoryScreen(),
         adminDashboard => const AdminDashboardScreen(),
+        adminCategories => const CategoryAdminScreen(),
         adminBrands => const BrandApprovalScreen(),
         adminCampaigns => const CampaignApprovalScreen(),
         adminSettlements => const SettlementAdminScreen(),
