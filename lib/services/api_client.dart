@@ -2,12 +2,15 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-// Loi tra ve tu API, message da duoc chuan hoa de hien thi cho nguoi dung (NFR-USA-02)
+// Loi tra ve tu API, message da duoc chuan hoa de hien thi cho nguoi dung (NFR-USA-02).
+// Loi nghiep vu co them reason (ma ly do, vd. VOUCHER_USED) va details (du lieu kem theo) de man hinh hien chi tiet.
 class ApiException implements Exception {
-  const ApiException(this.message, {this.statusCode});
+  const ApiException(this.message, {this.statusCode, this.reason, this.details});
 
   final String message;
   final int? statusCode;
+  final String? reason;
+  final Map<String, dynamic>? details;
 
   @override
   String toString() => message;
@@ -94,6 +97,8 @@ class ApiClient {
       throw ApiException(
         _messageOf(decoded) ?? 'Đã có lỗi xảy ra, vui lòng thử lại.',
         statusCode: response.statusCode,
+        reason: _reasonOf(decoded),
+        details: _detailsOf(decoded),
       );
     }
     return unwrap(decoded);
@@ -122,5 +127,18 @@ class ApiClient {
     if (message is Map) message = message['message'];
     if (message is List) return message.join('\n');
     return message?.toString();
+  }
+
+  // F01: loi nghiep vu { error: { reason, details } } (vd. reason = VOUCHER_USED, details = { usedAt, storeName })
+  static String? _reasonOf(Object? decoded) {
+    final error = decoded is Map ? decoded['error'] : null;
+    final reason = error is Map ? error['reason'] : null;
+    return reason is String && reason.isNotEmpty ? reason : null;
+  }
+
+  static Map<String, dynamic>? _detailsOf(Object? decoded) {
+    final error = decoded is Map ? decoded['error'] : null;
+    final details = error is Map ? error['details'] : null;
+    return details is Map ? Map<String, dynamic>.from(details) : null;
   }
 }

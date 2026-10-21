@@ -14,6 +14,15 @@ final _date = DateFormat('dd/MM/yyyy');
 
 String formatDate(DateTime value) => _date.format(value.toUtc().add(const Duration(hours: 7)));
 
+final _time = DateFormat('HH:mm');
+final _timeDate = DateFormat('HH:mm dd/MM/yyyy');
+
+// Gio:phut theo gio Viet Nam, vd. thoi diem mo khoa o nhap OTP (FR-REDEEM-12)
+String formatTime(DateTime value) => _time.format(value.toUtc().add(const Duration(hours: 7)));
+
+// "HH:mm dd/MM/yyyy" gio Viet Nam, vd. "Da dung luc 10:00 12/10/2026" (FR-REDEEM-07)
+String formatTimeDate(DateTime value) => _timeDate.format(value.toUtc().add(const Duration(hours: 7)));
+
 // Phan tram -> chuoi gon: 10 -> "10", 7.5 -> "7.5", 99.99 -> "99.99".
 // Giu toi da 2 chu so thap phan de ty le hoa hong 99.99% khong bi lam tron thanh "100".
 String formatPercentValue(double percent) {

@@ -114,7 +114,16 @@ class StaffMember {
       );
 }
 
-// Danh gia cua khach hang va phan hoi cua thuong hieu (FR-ENGAGE-02..05)
+// Trang thai danh gia: quan tri vien an danh gia vi pham (FR-ENGAGE-05)
+class ReviewStatus {
+  ReviewStatus._();
+
+  static const visible = 'VISIBLE';
+  static const hidden = 'HIDDEN';
+}
+
+// Danh gia cua khach hang va phan hoi cua thuong hieu (FR-ENGAGE-02..05).
+// Portal thuong hieu va trang kiem duyet nhan them chien dich, nguoi danh gia, trang thai an / hien.
 class Review {
   const Review({
     required this.id,
@@ -122,6 +131,14 @@ class Review {
     required this.createdAt,
     this.comment,
     this.brandReply,
+    this.brandRepliedAt,
+    this.campaignId,
+    this.campaignTitle,
+    this.brandId,
+    this.brandName,
+    this.reviewerName,
+    this.voucherItemId,
+    this.status = ReviewStatus.visible,
   });
 
   final String id;
@@ -129,8 +146,34 @@ class Review {
   final DateTime createdAt;
   final String? comment;
   final String? brandReply;
+  final DateTime? brandRepliedAt;
+  final String? campaignId;
+  final String? campaignTitle;
+  final String? brandId;
+  final String? brandName;
+  final String? reviewerName;
+  final String? voucherItemId;
+  final String status;
 
   bool get hasReply => brandReply != null && brandReply!.isNotEmpty;
+  bool get isHidden => status == ReviewStatus.hidden;
+
+  // Ket qua an / hien khong kem ten thuong hieu: giu nguyen du lieu cu, chi doi trang thai
+  Review withStatus(String value) => Review(
+        id: id,
+        rating: rating,
+        createdAt: createdAt,
+        comment: comment,
+        brandReply: brandReply,
+        brandRepliedAt: brandRepliedAt,
+        campaignId: campaignId,
+        campaignTitle: campaignTitle,
+        brandId: brandId,
+        brandName: brandName,
+        reviewerName: reviewerName,
+        voucherItemId: voucherItemId,
+        status: value,
+      );
 
   factory Review.fromJson(Map<String, dynamic> json) => Review(
         id: json['id'] as String,
@@ -138,5 +181,28 @@ class Review {
         createdAt: asDate(json['createdAt']),
         comment: json['comment'] as String?,
         brandReply: json['brandReply'] as String?,
+        brandRepliedAt: asDateOrNull(json['brandRepliedAt']),
+        campaignId: json['campaignId'] as String?,
+        campaignTitle: json['campaignTitle'] as String?,
+        brandId: json['brandId'] as String?,
+        brandName: json['brandName'] as String?,
+        reviewerName: json['reviewerName'] as String?,
+        voucherItemId: json['voucherItemId'] as String?,
+        status: json['status'] as String? ?? ReviewStatus.visible,
+      );
+}
+
+// Ket qua an / hien danh gia: danh gia sau cap nhat + diem trung binh moi cua chien dich (chi tinh danh gia dang hien)
+class ReviewModeration {
+  const ReviewModeration({required this.review, required this.reviewCount, this.avgRating});
+
+  final Review review;
+  final double? avgRating;
+  final int reviewCount;
+
+  factory ReviewModeration.fromJson(Map<String, dynamic> json) => ReviewModeration(
+        review: Review.fromJson(json),
+        avgRating: asDoubleOrNull(json['avgRating']),
+        reviewCount: asInt(json['reviewCount']),
       );
 }

@@ -55,6 +55,7 @@ const _adminNav = [
   PortalNavItem(AppRoutes.adminSettlements, 'Đối soát', Icons.account_balance_outlined),
   PortalNavItem(AppRoutes.adminCommission, 'Tỷ lệ hoa hồng', Icons.percent),
   PortalNavItem(AppRoutes.adminRefunds, 'Hoàn tiền thủ công', Icons.currency_exchange),
+  PortalNavItem(AppRoutes.adminReviews, 'Đánh giá', Icons.rate_review_outlined),
 ];
 
 // Khung chung cua moi man sau dang nhap: thanh tren (ten khu vuc, tai khoan, dang xuat) + menu.

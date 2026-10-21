@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/brand.dart';
 import '../../routes.dart';
+import '../../services/api_client.dart';
 import '../../services/portal_services.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/format.dart';
@@ -10,7 +11,8 @@ import '../../widgets/brand_gate.dart';
 import '../../widgets/common.dart';
 import '../../widgets/portal_shell.dart';
 
-// FR-ENGAGE-04: thuong hieu xem danh gia va phan hoi mot lan cho moi danh gia
+// FR-ENGAGE-04: thuong hieu xem danh gia va phan hoi mot lan cho moi danh gia.
+// FR-ENGAGE-05: danh gia bi quan tri vien an van hien o day (kem nhan "Da bi an") va van phan hoi duoc.
 class ReviewListScreen extends StatelessWidget {
   const ReviewListScreen({super.key});
 
@@ -56,7 +58,10 @@ class _ReviewListState extends State<_ReviewList> {
       showMessage(context, 'Đã gửi phản hồi.');
       _reload();
     } catch (e) {
-      if (mounted) showMessage(context, e.toString(), error: true);
+      if (!mounted) return;
+      showMessage(context, e.toString(), error: true);
+      // Da co phan hoi truoc do (vd. tab khac): tai lai de hien phan hoi
+      if (e is ApiException && e.reason == 'REVIEW_ALREADY_REPLIED') _reload();
     }
   }
 
@@ -92,6 +97,20 @@ class _ReviewListState extends State<_ReviewList> {
                             const Spacer(),
                             Text(formatDateTime(r.createdAt), style: const TextStyle(color: AppColors.textSecondary)),
                           ]),
+                          const SizedBox(height: AppSpacing.xs),
+                          Wrap(
+                            spacing: AppSpacing.sm,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              if (r.campaignTitle != null && r.campaignTitle!.isNotEmpty)
+                                Text(r.campaignTitle!, style: const TextStyle(fontWeight: FontWeight.w700)),
+                              if (r.isHidden) const StatusChip(ReviewStatus.hidden, label: 'Đã bị ẩn'),
+                            ],
+                          ),
+                          Text(
+                            r.reviewerName ?? 'Khách hàng',
+                            style: const TextStyle(color: AppColors.textSecondary),
+                          ),
                           if (r.comment != null && r.comment!.isNotEmpty) ...[
                             const SizedBox(height: AppSpacing.xs),
                             Text(r.comment!),
