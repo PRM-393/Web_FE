@@ -62,6 +62,30 @@ class BrandService {
     },
   );
 
+  // FR-BRAND-04: sua chi nhanh. Chi gui cac truong co thay doi; status = true de mo lai chi nhanh
+  // da vo hieu (may chu doi hoi co toa do moi cho mo lai - DC-05).
+  Future<void> updateStore(
+    String storeId, {
+    String? name,
+    String? address,
+    double? latitude,
+    double? longitude,
+    String? phone,
+    String? openingHours,
+    bool? status,
+  }) => _api.patch(
+    '/brands/stores/$storeId',
+    body: {
+      'name': ?name,
+      'address': ?address,
+      'latitude': ?latitude,
+      'longitude': ?longitude,
+      'phone': ?phone,
+      'openingHours': ?openingHours,
+      'status': ?status,
+    },
+  );
+
   Future<void> deactivateStore(String storeId) =>
       _api.patch('/brands/stores/$storeId/deactivate');
 
