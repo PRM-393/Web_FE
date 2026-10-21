@@ -50,3 +50,10 @@ app.*.map.json
 # Flutter SDK tai ve khi build tren Vercel
 .flutter-sdk/
 .vercel/
+
+# Legacy React build artifacts (Flutter Web is the active app)
+node_modules/
+dist/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts

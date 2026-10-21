@@ -5,6 +5,7 @@ import '../providers/auth_provider.dart';
 import '../providers/store_session_provider.dart';
 import '../routes.dart';
 import '../theme/app_theme.dart';
+import 'brand_identity.dart';
 
 class PortalNavItem {
   const PortalNavItem(this.route, this.label, this.icon);
@@ -16,17 +17,33 @@ class PortalNavItem {
 
 // Menu theo vai tro (khop cac khu vuc trong AppRoutes)
 const _brandNav = [
-  PortalNavItem(AppRoutes.brandCampaigns, 'Chiến dịch', Icons.campaign_outlined),
+  PortalNavItem(
+    AppRoutes.brandCampaigns,
+    'Chiến dịch',
+    Icons.campaign_outlined,
+  ),
   PortalNavItem(AppRoutes.brandStores, 'Chi nhánh', Icons.storefront_outlined),
   PortalNavItem(AppRoutes.brandStaff, 'Nhân viên', Icons.badge_outlined),
   PortalNavItem(AppRoutes.brandReviews, 'Đánh giá', Icons.star_outline),
   PortalNavItem(AppRoutes.brandReports, 'Báo cáo', Icons.bar_chart),
-  PortalNavItem(AppRoutes.brandSettlements, 'Đối soát', Icons.receipt_long_outlined),
-  PortalNavItem(AppRoutes.brandProfile, 'Hồ sơ thương hiệu', Icons.business_outlined),
+  PortalNavItem(
+    AppRoutes.brandSettlements,
+    'Đối soát',
+    Icons.receipt_long_outlined,
+  ),
+  PortalNavItem(
+    AppRoutes.brandProfile,
+    'Hồ sơ thương hiệu',
+    Icons.business_outlined,
+  ),
 ];
 
 const _storeNav = [
-  PortalNavItem(AppRoutes.storeRedeem, 'Xác nhận sử dụng', Icons.qr_code_scanner),
+  PortalNavItem(
+    AppRoutes.storeRedeem,
+    'Xác nhận sử dụng',
+    Icons.qr_code_scanner,
+  ),
   PortalNavItem(AppRoutes.storeHistory, 'Lịch sử trong ngày', Icons.history),
   PortalNavItem(AppRoutes.storeSelect, 'Đổi chi nhánh', Icons.swap_horiz),
 ];
@@ -43,7 +60,12 @@ const _adminNav = [
 // Khung chung cua moi man sau dang nhap: thanh tren (ten khu vuc, tai khoan, dang xuat) + menu.
 // Man rong (>= 900px) dung NavigationRail co dinh; man hep (dien thoai cua nhan vien) dung Drawer.
 class PortalShell extends StatelessWidget {
-  const PortalShell({super.key, required this.currentRoute, required this.child, this.floatingActionButton});
+  const PortalShell({
+    super.key,
+    required this.currentRoute,
+    required this.child,
+    this.floatingActionButton,
+  });
 
   final String currentRoute;
   final Widget child;
@@ -62,7 +84,9 @@ class PortalShell extends StatelessWidget {
     };
     final selected = items.indexWhere((i) => i.route == currentRoute);
     final wide = MediaQuery.sizeOf(context).width >= wideBreakpoint;
-    final store = auth.role == Roles.storeStaff ? context.watch<StoreSessionProvider>().currentStore : null;
+    final store = auth.role == Roles.storeStaff
+        ? context.watch<StoreSessionProvider>().currentStore
+        : null;
 
     void open(int index) {
       if (index == selected) return;
@@ -71,18 +95,36 @@ class PortalShell extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-        bottom: const PreferredSize(preferredSize: Size.fromHeight(1), child: Divider(height: 1)),
+        toolbarHeight: 72,
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+        ),
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1),
+        ),
         actions: [
           if (store != null)
             Padding(
               padding: const EdgeInsets.only(right: AppSpacing.sm),
-              child: Chip(avatar: const Icon(Icons.storefront, size: 18), label: Text(store.name)),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: wide ? 260 : 120),
+                child: Chip(
+                  avatar: const Icon(Icons.storefront, size: 18),
+                  label: Text(store.name, overflow: TextOverflow.ellipsis),
+                ),
+              ),
             ),
           if (wide && auth.user != null)
             Padding(
               padding: const EdgeInsets.only(right: AppSpacing.sm),
-              child: Center(child: Text(auth.user!.email, style: const TextStyle(color: AppColors.textSecondary))),
+              child: Center(
+                child: Text(
+                  auth.user!.email,
+                  style: const TextStyle(color: AppColors.textSecondary),
+                ),
+              ),
             ),
           IconButton(
             tooltip: 'Đăng xuất',
@@ -98,8 +140,13 @@ class PortalShell extends StatelessWidget {
                 child: ListView(
                   children: [
                     ListTile(
-                      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-                      subtitle: auth.user == null ? null : Text(auth.user!.email),
+                      title: Text(
+                        title,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      subtitle: auth.user == null
+                          ? null
+                          : Text(auth.user!.email),
                     ),
                     const Divider(),
                     for (var i = 0; i < items.length; i++)
@@ -120,15 +167,98 @@ class PortalShell extends StatelessWidget {
       body: wide && items.isNotEmpty
           ? Row(
               children: [
-                NavigationRail(
-                  extended: true,
-                  minExtendedWidth: 220,
-                  selectedIndex: selected < 0 ? null : selected,
-                  onDestinationSelected: open,
-                  destinations: [
-                    for (final item in items)
-                      NavigationRailDestination(icon: Icon(item.icon), label: Text(item.label)),
-                  ],
+                Container(
+                  width: 252,
+                  color: Colors.white,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(24, 28, 24, 32),
+                        child: BrandIdentity(),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 28),
+                        child: Text(
+                          'KHÔNG GIAN LÀM VIỆC',
+                          style: TextStyle(
+                            fontSize: 10,
+                            letterSpacing: 1.6,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: ListView(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          children: [
+                            for (var i = 0; i < items.length; i++)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: ListTile(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    selectedTileColor: const Color(0xFFE5F1E9),
+                                    selectedColor: AppColors.primaryDark,
+                                    selected: selected == i,
+                                    leading: Icon(items[i].icon, size: 21),
+                                    title: Text(
+                                      items[i].label,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: selected == i
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                      ),
+                                    ),
+                                    onTap: () => open(i),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        margin: const EdgeInsets.all(20),
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5EC),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.confirmation_number_outlined,
+                              color: AppColors.primary,
+                            ),
+                            SizedBox(height: 10),
+                            Text(
+                              'Ưu đãi tốt. Kết nối bền.',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            Text(
+                              'Cùng xây dựng trải nghiệm khách hàng tốt hơn mỗi ngày.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                height: 1.5,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const VerticalDivider(width: 1),
                 Expanded(child: child),
