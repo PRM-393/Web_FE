@@ -31,6 +31,29 @@ class FakeBackend {
     headers: {'content-type': 'application/json; charset=utf-8'},
   );
 
+  // Loi nghiep vu theo dinh dang F01 cua BE (BusinessException): error co them reason + details
+  static http.Response businessError(
+    int status,
+    String reason,
+    String message, {
+    Map<String, Object?>? details,
+  }) => http.Response(
+    jsonEncode({
+      'data': null,
+      'error': {
+        'code': status,
+        'message': message,
+        'reason': reason,
+        'details': details,
+        'path': '/api/test',
+        'timestamp': '2026-10-21T00:00:00.000Z',
+      },
+      'meta': null,
+    }),
+    status,
+    headers: {'content-type': 'application/json; charset=utf-8'},
+  );
+
   late final client = MockClient((request) async {
     requests.add(request);
     final path = request.url.path.replaceFirst('/api', '');

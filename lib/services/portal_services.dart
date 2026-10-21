@@ -127,20 +127,25 @@ class RedeemService {
   Future<List<Store>> myStores() async =>
       asList(await _api.get('/redeem/my-stores'), Store.fromJson);
 
+  // FR-AUTH-12: may chu gan chi nhanh vao phien; chua chon thi POST /redeem bi tu choi (STORE_NOT_SELECTED)
   Future<void> selectStore(String storeId) =>
       _api.post('/auth/select-store', body: {'storeId': storeId});
 
+  // FR-REDEEM-05/06: gui DUNG MOT trong hai - nguyen chuoi QR (may chu kiem chu ky) hoac OTP 6 so
   Future<RedeemResult> redeem({
     required String storeId,
-    String? nonce,
+    String? qrPayload,
     String? otpCode,
     int? billAmount,
   }) async {
+    if ((qrPayload == null) == (otpCode == null)) {
+      throw ArgumentError('Cần gửi đúng một trong hai: qrPayload hoặc otpCode.');
+    }
     final json = await _api.post(
       '/redeem',
       body: {
         'storeId': storeId,
-        'nonce': ?nonce,
+        'qrPayload': ?qrPayload,
         'otpCode': ?otpCode,
         'billAmount': ?billAmount,
       },
@@ -150,6 +155,13 @@ class RedeemService {
 
   Future<List<RedemptionLog>> historyToday() async =>
       asList(await _api.get('/redeem/history/today'), RedemptionLog.fromJson);
+
+  // FR-REDEEM-08: sua gia tri hoa don trong 10 phut sau khi xac nhan, tra ve dong lich su da cap nhat
+  Future<RedemptionLog> updateBill(String logId, int billAmount) async =>
+      RedemptionLog.fromJson(
+        await _api.patch('/redeem/logs/$logId/bill', body: {'billAmount': billAmount})
+            as Map<String, dynamic>,
+      );
 }
 
 // Chuc nang quan tri - UC-04, UC-05, FR-REPORT-03/04, FR-SETTLE-01/07, FR-REFUND-06
@@ -210,12 +222,61 @@ class AdminService {
     body: {'bankTxnRef': bankTxnRef},
   );
 
+  // UC-07: hang doi hoan tien thu cong (cong thanh toan khong hoan tu dong duoc)
   Future<List<RefundRequest>> manualPendingRefunds() async =>
       asList(await _api.get('/refunds/manual-pending'), RefundRequest.fromJson);
 
+  // Da hoan tay: bat buoc ma giao dich hoan; may chu chan tong tien hoan vuot giao dich da nhan (DC-12)
   Future<void> confirmManualRefund(String id, String gatewayRefundId) =>
       _api.patch(
         '/refunds/$id/confirm-manual',
         body: {'gatewayRefundId': gatewayRefundId.trim()},
+      );
+
+  // Khong hoan duoc: yeu cau chuyen FAILED, voucher duoc khoi phuc cho khach
+  Future<void> failManualRefund(String id, String reason) =>
+      _api.patch('/refunds/$id/fail-manual', body: {'reason': reason.trim()});
+
+  // UC-07: don thanh toan lech so tien, cho quan tri vien hoan lai thu cong
+  Future<List<PaymentMismatchOrder>> paymentMismatches() async => asList(
+    await _api.get('/admin/payment-mismatches'),
+    PaymentMismatchOrder.fromJson,
+  );
+
+  Future<void> confirmMismatchRefund(String orderId, String gatewayRefundId) =>
+      _api.patch(
+        '/admin/payment-mismatches/$orderId/confirm-refund',
+        body: {'gatewayRefundId': gatewayRefundId.trim()},
+      );
+
+  // FR-ENGAGE-05: danh sach danh gia de kiem duyet, loc theo trang thai / thuong hieu, co phan trang
+  Future<PageResult<Review>> reviews({
+    String? status,
+    String? brandId,
+    int page = 1,
+    int pageSize = 20,
+  }) async => PageResult.fromJson(
+    await _api.get(
+      '/admin/reviews',
+      query: {
+        'status': status,
+        'brandId': brandId,
+        'page': page,
+        'pageSize': pageSize,
+      },
+    ),
+    Review.fromJson,
+  );
+
+  // An danh gia vi pham: bat buoc ly do (ghi AuditLog); tra ve danh gia + diem trung binh moi cua chien dich
+  Future<ReviewModeration> hideReview(String id, String reason) async =>
+      ReviewModeration.fromJson(
+        await _api.patch('/admin/reviews/$id/hide', body: {'reason': reason.trim()})
+            as Map<String, dynamic>,
+      );
+
+  Future<ReviewModeration> unhideReview(String id) async =>
+      ReviewModeration.fromJson(
+        await _api.patch('/admin/reviews/$id/unhide') as Map<String, dynamic>,
       );
 }

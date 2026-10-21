@@ -161,15 +161,19 @@ class StatusChip extends StatelessWidget {
     'MANUAL_PENDING': 'Chờ hoàn thủ công',
     'ACTIVE': 'Đang hoạt động',
     'INACTIVE': 'Đã vô hiệu hóa',
+    'PAYMENT_MISMATCH': 'Lệch số tiền',
+    'VISIBLE': 'Đang hiển thị',
+    'HIDDEN': 'Đã ẩn',
   };
 
   static Color colorOf(String status) => switch (status) {
-    'APPROVED' || 'PUBLISHED' || 'PAID' || 'ACTIVE' => AppColors.success,
-    'PENDING' || 'MANUAL_PENDING' => AppColors.secondary,
+    'APPROVED' || 'PUBLISHED' || 'PAID' || 'ACTIVE' || 'VISIBLE' => AppColors.success,
+    'PENDING' || 'MANUAL_PENDING' || 'PAYMENT_MISMATCH' => AppColors.secondary,
     'REJECTED' ||
     'ENDED' ||
     'INACTIVE' ||
     'SUSPENDED' ||
+    'HIDDEN' ||
     'SOLD_OUT' => AppColors.danger,
     _ => AppColors.textSecondary,
   };
@@ -292,25 +296,52 @@ Future<bool> confirmDialog(
   return result ?? false;
 }
 
-// Hop thoai nhap mot dong chu bat buoc (ly do tu choi, ma giao dich, phan hoi danh gia...)
+// Hop thoai nhap mot dong chu bat buoc (ly do tu choi, ma giao dich, phan hoi danh gia...).
+// message: giai thich phia tren o nhap; validator: thay kiem tra mac dinh "khong duoc de trong" (vd. so tien hoa don).
 Future<String?> promptTextDialog(
   BuildContext context, {
   required String title,
   required String label,
   String confirm = 'Xác nhận',
   int maxLines = 1,
+  String? message,
+  String? initialValue,
+  TextInputType? keyboardType,
+  FormFieldValidator<String>? validator,
 }) => showDialog<String>(
   context: context,
-  builder: (_) => _PromptDialog(title, label, confirm, maxLines),
+  builder: (_) => _PromptDialog(
+    title,
+    label,
+    confirm,
+    maxLines,
+    message: message,
+    initialValue: initialValue,
+    keyboardType: keyboardType,
+    validator: validator,
+  ),
 );
 
 class _PromptDialog extends StatefulWidget {
-  const _PromptDialog(this.title, this.label, this.confirm, this.maxLines);
+  const _PromptDialog(
+    this.title,
+    this.label,
+    this.confirm,
+    this.maxLines, {
+    this.message,
+    this.initialValue,
+    this.keyboardType,
+    this.validator,
+  });
 
   final String title;
   final String label;
   final String confirm;
   final int maxLines;
+  final String? message;
+  final String? initialValue;
+  final TextInputType? keyboardType;
+  final FormFieldValidator<String>? validator;
 
   @override
   State<_PromptDialog> createState() => _PromptDialogState();
@@ -318,7 +349,7 @@ class _PromptDialog extends StatefulWidget {
 
 class _PromptDialogState extends State<_PromptDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _controller = TextEditingController();
+  late final _controller = TextEditingController(text: widget.initialValue);
 
   @override
   void dispose() {
@@ -339,14 +370,26 @@ class _PromptDialogState extends State<_PromptDialog> {
       width: 420,
       child: Form(
         key: _formKey,
-        child: TextFormField(
-          controller: _controller,
-          autofocus: true,
-          maxLines: widget.maxLines,
-          decoration: InputDecoration(labelText: widget.label),
-          validator: (v) => (v == null || v.trim().isEmpty)
-              ? 'Vui lòng nhập ${widget.label.toLowerCase()}'
-              : null,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (widget.message != null) ...[
+              Text(widget.message!),
+              const SizedBox(height: AppSpacing.md),
+            ],
+            TextFormField(
+              controller: _controller,
+              autofocus: true,
+              maxLines: widget.maxLines,
+              keyboardType: widget.keyboardType,
+              decoration: InputDecoration(labelText: widget.label),
+              validator: widget.validator ??
+                  (v) => (v == null || v.trim().isEmpty)
+                      ? 'Vui lòng nhập ${widget.label.toLowerCase()}'
+                      : null,
+            ),
+          ],
         ),
       ),
     ),

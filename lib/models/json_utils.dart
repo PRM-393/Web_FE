@@ -21,3 +21,29 @@ DateTime? asDateOrNull(Object? value) => value is String ? DateTime.tryParse(val
 
 List<T> asList<T>(Object? value, T Function(Map<String, dynamic>) fromJson) =>
     value is List ? value.whereType<Map<String, dynamic>>().map(fromJson).toList() : <T>[];
+
+// F01: trang ket qua { items, total, page, pageSize }; phan hoi dang mang (cu) coi nhu mot trang duy nhat
+class PageResult<T> {
+  const PageResult({required this.items, required this.total, required this.page, required this.pageSize});
+
+  final List<T> items;
+  final int total;
+  final int page;
+  final int pageSize;
+
+  bool get hasMore => page * pageSize < total;
+
+  factory PageResult.fromJson(Object? json, T Function(Map<String, dynamic>) fromJson) {
+    if (json is Map) {
+      final items = asList(json['items'], fromJson);
+      return PageResult(
+        items: items,
+        total: asInt(json['total'], items.length),
+        page: asInt(json['page'], 1),
+        pageSize: asInt(json['pageSize'], items.isEmpty ? 20 : items.length),
+      );
+    }
+    final items = asList(json, fromJson);
+    return PageResult(items: items, total: items.length, page: 1, pageSize: items.isEmpty ? 20 : items.length);
+  }
+}

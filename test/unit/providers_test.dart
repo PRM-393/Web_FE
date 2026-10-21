@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:voucher_platform_web/models/redeem.dart';
 import 'package:voucher_platform_web/providers/auth_provider.dart';
 import 'package:voucher_platform_web/providers/brand_provider.dart';
 import 'package:voucher_platform_web/providers/store_session_provider.dart';
@@ -9,6 +10,10 @@ import 'package:voucher_platform_web/services/auth_service.dart';
 import 'package:voucher_platform_web/services/portal_services.dart';
 
 import '../helpers/fake_backend.dart';
+
+// Chuoi QR dinh dang v1 con han (chu ky do may chu kiem, client chi kiem dinh dang)
+String validQr({DateTime? expiresAt}) =>
+    'v1.0123456789abcdef0123456789abcdef.${(expiresAt ?? DateTime.now().add(const Duration(minutes: 1))).millisecondsSinceEpoch}.c2lnbmF0dXJl_-';
 
 Map<String, dynamic> store(String id, {bool active = true}) => {
   'id': id,
@@ -220,7 +225,7 @@ void main() {
       expect(backend.bodyOf('POST', '/auth/select-store'), {'storeId': 's1'});
     });
 
-    test('redeem gui storeId cua chi nhanh dang lam va nonce; thanh cong thi tai lai lich su', () async {
+    test('redeem gui storeId cua chi nhanh dang lam va NGUYEN chuoi QR (qrPayload, khong con nonce); thanh cong thi tai lai lich su', () async {
       backend.on('GET', '/redeem/my-stores', (_) => [store('s1'), store('s2')]);
       backend.on(
         'POST',
@@ -249,15 +254,110 @@ void main() {
       );
       await session.selectStore(session.stores[1]);
 
-      final ok = await session.redeem(nonce: 'n-1', billAmount: 120000);
+      final qr = validQr();
+      final ok = await session.redeemQr(' $qr ', billAmount: 120000);
       expect(ok, isTrue);
       expect(backend.bodyOf('POST', '/redeem'), {
         'storeId': 's2',
-        'nonce': 'n-1',
+        'qrPayload': qr,
         'billAmount': 120000,
       });
       expect(session.lastResult?.voucherItemId, 'v1');
       expect(session.history, hasLength(1));
+    });
+
+    test('chuoi QR sai dinh dang hoac da het han thi bao loi ngay, khong goi API', () async {
+      backend.on('GET', '/redeem/my-stores', (_) => [store('s1')]);
+      final session = StoreSessionProvider(RedeemService(api));
+      await session.loadStores();
+
+      expect(await session.redeemQr('item-1.abc.1700000000000.sig'), isFalse);
+      expect(session.lastFailure?.reason, RedeemReason.tokenInvalid);
+
+      final expired = validQr(expiresAt: DateTime.now().subtract(const Duration(seconds: 1)));
+      expect(await session.redeemQr(expired), isFalse);
+      expect(session.lastFailure?.reason, RedeemReason.tokenExpired);
+      expect(backend.called('POST', '/redeem'), isFalse);
+    });
+
+    test('BILL_REQUIRED: chua phai ket qua cuoi, giu ma de gui lai kem hoa don (BR-03)', () async {
+      backend.on('GET', '/redeem/my-stores', (_) => [store('s1')]);
+      var calls = 0;
+      backend.on('POST', '/redeem', (_) {
+        calls++;
+        return calls == 1
+            ? FakeBackend.businessError(
+                400,
+                'BILL_REQUIRED',
+                'Voucher mệnh giá bắt buộc nhập giá trị hóa đơn (BR-03).',
+                details: {'voucherType': 'PREPAID', 'faceValue': 100000},
+              )
+            : {'message': 'ok', 'voucherItemId': 'v1'};
+      });
+      backend.on('GET', '/redeem/history/today', (_) => []);
+      final session = StoreSessionProvider(RedeemService(api));
+      await session.loadStores();
+      final qr = validQr();
+
+      expect(await session.redeemQr(qr), isFalse);
+      expect(session.lastFailure, isNull, reason: 'khong hien khung do');
+      expect(session.billRequirement?.qrPayload, qr);
+      expect(session.billRequirement?.faceValue, 100000);
+
+      expect(await session.resubmitWithBill(150000), isTrue);
+      expect(backend.bodyOf('POST', '/redeem'), {'storeId': 's1', 'qrPayload': qr, 'billAmount': 150000});
+      expect(session.billRequirement, isNull);
+      expect(session.lastResult?.voucherItemId, 'v1');
+    });
+
+    test('OTP_LOCKED: khoa o nhap OTP den lockedUntil, khong gui OTP nua nhung van gui QR (FR-REDEEM-12)', () async {
+      backend.on('GET', '/redeem/my-stores', (_) => [store('s1')]);
+      final lockedUntil = DateTime.now().toUtc().add(const Duration(minutes: 15));
+      backend.on(
+        'POST',
+        '/redeem',
+        (_) => FakeBackend.businessError(
+          429,
+          'OTP_LOCKED',
+          'Nhập sai OTP quá nhiều lần.',
+          details: {'lockedUntil': lockedUntil.toIso8601String()},
+        ),
+      );
+      final session = StoreSessionProvider(RedeemService(api));
+      await session.loadStores();
+
+      expect(await session.redeem(otpCode: '111111'), isFalse);
+      expect(session.isOtpLocked(DateTime.now()), isTrue);
+      expect(session.otpLockedUntil, lockedUntil);
+      expect(session.lastFailure, isNull);
+
+      final before = backend.requests.length;
+      expect(await session.redeem(otpCode: '222222'), isFalse);
+      expect(backend.requests.length, before, reason: 'dang khoa thi khong goi may chu');
+
+      await session.redeemQr(validQr());
+      expect(backend.bodyOf('POST', '/redeem').containsKey('qrPayload'), isTrue);
+      expect(session.isOtpLocked(lockedUntil.add(const Duration(seconds: 1))), isFalse);
+    });
+
+    test('sua hoa don: PATCH dung URL / body va thay dong lich su (FR-REDEEM-08)', () async {
+      backend.on('GET', '/redeem/my-stores', (_) => [store('s1')]);
+      backend.on('GET', '/redeem/history/today', (_) => [
+            {'id': 'l1', 'storeId': 's1', 'method': 'QR', 'redeemedAt': '2026-10-12T03:00:00Z', 'billEditable': true},
+          ]);
+      backend.on('PATCH', '/redeem/logs/l1/bill', (_) => {
+            'id': 'l1',
+            'storeId': 's1',
+            'method': 'QR',
+            'redeemedAt': '2026-10-12T03:00:00Z',
+            'billAmount': 99000,
+            'billEditable': true,
+          });
+      final session = StoreSessionProvider(RedeemService(api));
+      await session.loadHistory();
+      await session.updateBill('l1', 99000);
+      expect(backend.bodyOf('PATCH', '/redeem/logs/l1/bill'), {'billAmount': 99000});
+      expect(session.history.single.billAmount, 99000);
     });
 
     test(

@@ -53,12 +53,12 @@ void main() {
       ],
     );
     backend.on('PATCH', '/refunds/r1/confirm-manual', (_) => {});
+    backend.on('GET', '/admin/payment-mismatches', (_) => []);
     final (app, _) = await buildTestApp(backend, loggedInAs: Roles.admin);
     await tester.pumpWidget(app);
     await openRoute(tester, AppRoutes.adminRefunds);
+    // UC-07: mot hop thoai duy nhat, bat buoc nhap ma giao dich hoan
     await tester.tap(find.text('Đã hoàn tiền'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Đã hoàn tiền').last);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField), 'BANK-123');
     await tester.tap(find.text('Xác nhận'));
