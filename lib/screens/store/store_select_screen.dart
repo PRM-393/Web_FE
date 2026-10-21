@@ -32,7 +32,11 @@ class _StoreSelectScreenState extends State<StoreSelectScreen> {
     if (session.isLoadingStores) {
       body = const Center(child: CircularProgressIndicator());
     } else if (session.storesError != null) {
-      body = MessageView(icon: Icons.cloud_off, message: session.storesError!, onRetry: session.loadStores);
+      body = MessageView(
+        icon: Icons.cloud_off,
+        message: session.storesError!,
+        onRetry: session.loadStores,
+      );
     } else if (session.stores.isEmpty) {
       body = MessageView(
         icon: Icons.store_mall_directory_outlined,
@@ -41,23 +45,45 @@ class _StoreSelectScreenState extends State<StoreSelectScreen> {
       );
     } else {
       body = ListView(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          0,
+          AppSpacing.lg,
+          AppSpacing.lg,
+        ),
         children: [
           for (final s in session.stores)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
               child: Card(
                 child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-                  leading: const Icon(Icons.storefront, color: AppColors.primary),
-                  title: Text(s.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm,
+                  ),
+                  leading: const Icon(
+                    Icons.storefront,
+                    color: AppColors.primary,
+                  ),
+                  title: Text(
+                    s.name,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   subtitle: Text(s.address),
                   trailing: session.currentStore?.id == s.id
                       ? const Icon(Icons.check_circle, color: AppColors.success)
                       : const Icon(Icons.chevron_right),
-                  onTap: () {
-                    session.selectStore(s);
-                    AppRoutes.go(context, AppRoutes.storeRedeem);
+                  onTap: () async {
+                    try {
+                      await session.selectStore(s);
+                      if (context.mounted) {
+                        AppRoutes.go(context, AppRoutes.storeRedeem);
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        showMessage(context, e.toString(), error: true);
+                      }
+                    }
                   },
                 ),
               ),
