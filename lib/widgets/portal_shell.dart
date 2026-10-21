@@ -49,6 +49,7 @@ const _storeNav = [
 ];
 
 const _adminNav = [
+  PortalNavItem(AppRoutes.adminCategories, 'Danh mục ngành hàng', Icons.category_outlined),
   PortalNavItem(
     AppRoutes.adminDashboard,
     'Bảng điều khiển',

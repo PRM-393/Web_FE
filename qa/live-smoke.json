@@ -1,0 +1,74 @@
+{
+  "testedAt": "2026-10-21T03:53:22.425Z",
+  "database": "local PostgreSQL",
+  "email": "SMTP accepted; inbox receipt requires user confirmation",
+  "results": [
+    {
+      "name": "SMTP OTP request accepted",
+      "passed": true
+    },
+    {
+      "name": "OTP real DB verify",
+      "passed": true
+    },
+    {
+      "name": "OTP replay rejected",
+      "passed": true
+    },
+    {
+      "name": "PostgreSQL concurrent refresh: one winner",
+      "passed": true
+    },
+    {
+      "name": "Logout revokes session",
+      "passed": true
+    },
+    {
+      "name": "SMTP reset request accepted",
+      "passed": true
+    },
+    {
+      "name": "Reset accepted",
+      "passed": true
+    },
+    {
+      "name": "Reset replay rejected",
+      "passed": true
+    },
+    {
+      "name": "Reset revoked old session",
+      "passed": true
+    },
+    {
+      "name": "New password works",
+      "passed": true
+    },
+    {
+      "name": "Public search 0",
+      "passed": true
+    },
+    {
+      "name": "Public search 1",
+      "passed": true
+    },
+    {
+      "name": "Public search 2",
+      "passed": true
+    },
+    {
+      "name": "Public search 3",
+      "passed": true
+    },
+    {
+      "name": "Public search 4",
+      "passed": true
+    }
+  ],
+  "searchMilliseconds": [
+    15,
+    6,
+    6,
+    6,
+    5
+  ]
+}

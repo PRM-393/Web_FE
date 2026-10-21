@@ -217,8 +217,9 @@ class _LoginScreenState extends State<LoginScreen> {
               : const Text('Đăng nhập'),
         ),
         const SizedBox(height: AppSpacing.md),
+        Wrap(spacing: 8, children: [TextButton(onPressed: () => AppRoutes.go(context, AppRoutes.resetPassword), child: const Text('Quên mật khẩu?')), TextButton(onPressed: () => AppRoutes.go(context, AppRoutes.activate), child: const Text('Kích hoạt tài khoản'))]),
         const Text(
-          'Khách hàng vui lòng dùng ứng dụng di động để mua và sử dụng voucher.',
+ 'Khách hàng vui lòng dùng ứng dụng di động để mua và sử dụng voucher.',
           textAlign: TextAlign.left,
           style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
         ),

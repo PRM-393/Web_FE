@@ -154,6 +154,12 @@ class RedeemService {
 
 // Chuc nang quan tri - UC-04, UC-05, FR-REPORT-03/04, FR-SETTLE-01/07, FR-REFUND-06
 class AdminService {
+  Future<List<Map<String, dynamic>>> categories() async => (await _api.get('/admin/categories') as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  Future<void> saveCategory(String name, {String? id}) async {
+    if (id == null) { await _api.post('/admin/categories', body: {'name': name}); }
+    else { await _api.patch('/admin/categories/$id', body: {'name': name}); }
+  }
+  Future<void> deleteCategory(String id) => _api.delete('/admin/categories/$id');
   AdminService(this._api);
 
   final ApiClient _api;

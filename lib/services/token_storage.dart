@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -13,6 +14,17 @@ class TokenStorage {
   static const _accessKey = 'voucher_platform_access_token';
   static const _refreshKey = 'voucher_platform_refresh_token';
   static const _userKey = 'voucher_platform_user';
+
+  Future<String>? _device;
+  Future<String> deviceId() => _device ??= () async {
+    const key = 'voucher_device_id';
+    final existing = await _storage.read(key: key);
+    if (existing != null) return existing;
+    final random = Random.secure();
+    final id = List.generate(32, (_) => random.nextInt(16).toRadixString(16)).join();
+    await _storage.write(key: key, value: id);
+    return id;
+  }();
 
   Future<void> save(LoginResponse session) async {
     await _storage.write(key: _accessKey, value: session.accessToken);
