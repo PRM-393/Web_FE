@@ -136,7 +136,52 @@ class AdminDashboard {
   );
 }
 
-// Yeu cau hoan tien cho quan tri vien xac nhan thu cong (FR-REFUND-06)
+// Thong tin lien he cua khach de quan tri vien doi chieu khi hoan tien (UC-07)
+class CustomerInfo {
+  const CustomerInfo({required this.id, required this.email, this.fullName, this.phone});
+
+  final String id;
+  final String email;
+  final String? fullName;
+  final String? phone;
+
+  // "Ho ten - email - so dien thoai" (noi bang dau cham giua), bo phan trong
+  String get summary => [
+    if (fullName != null && fullName!.trim().isNotEmpty) fullName!.trim(),
+    email,
+    if (phone != null && phone!.trim().isNotEmpty) phone!.trim(),
+  ].where((s) => s.isNotEmpty).join(' · ');
+
+  static CustomerInfo? fromJsonOrNull(Object? json) => json is Map<String, dynamic>
+      ? CustomerInfo(
+          id: json['id'] as String? ?? '',
+          email: json['email'] as String? ?? '',
+          fullName: json['fullName'] as String?,
+          phone: json['phone'] as String?,
+        )
+      : null;
+}
+
+// Giao dich thanh toan goc cua voucher can hoan
+class RefundPayment {
+  const RefundPayment({required this.id, required this.amount, this.gateway, this.gatewayTxnId});
+
+  final String id;
+  final String? gateway;
+  final String? gatewayTxnId;
+  final int amount;
+
+  static RefundPayment? fromJsonOrNull(Object? json) => json is Map<String, dynamic>
+      ? RefundPayment(
+          id: json['id'] as String? ?? '',
+          gateway: json['gateway'] as String?,
+          gatewayTxnId: json['gatewayTxnId'] as String?,
+          amount: asInt(json['amount']),
+        )
+      : null;
+}
+
+// Yeu cau hoan tien cho quan tri vien xac nhan thu cong (FR-REFUND-06, UC-07)
 class RefundRequest {
   const RefundRequest({
     required this.id,
@@ -144,6 +189,16 @@ class RefundRequest {
     required this.status,
     required this.createdAt,
     this.reason,
+    this.statusLabel,
+    this.rejectReason,
+    this.decidedAt,
+    this.amount,
+    this.voucherCode,
+    this.voucherStatus,
+    this.campaignId,
+    this.campaignTitle,
+    this.customer,
+    this.payment,
   });
 
   final String id;
@@ -151,6 +206,18 @@ class RefundRequest {
   final String status;
   final DateTime createdAt;
   final String? reason;
+  final String? statusLabel;
+  final String? rejectReason;
+  final DateTime? decidedAt;
+
+  // So tien se hoan cho khach (don gia voucher)
+  final int? amount;
+  final String? voucherCode;
+  final String? voucherStatus;
+  final String? campaignId;
+  final String? campaignTitle;
+  final CustomerInfo? customer;
+  final RefundPayment? payment;
 
   factory RefundRequest.fromJson(Map<String, dynamic> json) => RefundRequest(
     id: json['id'] as String,
@@ -158,5 +225,72 @@ class RefundRequest {
     status: json['status'] as String? ?? '',
     createdAt: asDate(json['createdAt']),
     reason: json['reason'] as String?,
+    statusLabel: json['statusLabel'] as String?,
+    rejectReason: json['rejectReason'] as String?,
+    decidedAt: asDateOrNull(json['decidedAt']),
+    amount: json['amount'] == null ? null : asInt(json['amount']),
+    voucherCode: json['voucherCode'] as String?,
+    voucherStatus: json['voucherStatus'] as String?,
+    campaignId: json['campaignId'] as String?,
+    campaignTitle: json['campaignTitle'] as String?,
+    customer: CustomerInfo.fromJsonOrNull(json['customer']),
+    payment: RefundPayment.fromJsonOrNull(json['payment']),
+  );
+}
+
+// Giao dich da nhan cua don lech so tien
+class MismatchPayment {
+  const MismatchPayment({required this.id, required this.amount, this.gatewayTxnId});
+
+  final String id;
+  final String? gatewayTxnId;
+  final int amount;
+
+  factory MismatchPayment.fromJson(Map<String, dynamic> json) => MismatchPayment(
+    id: json['id'] as String? ?? '',
+    gatewayTxnId: json['gatewayTxnId'] as String?,
+    amount: asInt(json['amount']),
+  );
+}
+
+// Don hang co so tien nhan duoc khac so tien phai tra (PAYMENT_MISMATCH) - UC-07
+class PaymentMismatchOrder {
+  const PaymentMismatchOrder({
+    required this.id,
+    required this.totalAmount,
+    required this.refundedAmount,
+    required this.createdAt,
+    required this.status,
+    this.campaignId,
+    this.campaignTitle,
+    this.customer,
+    this.payments = const [],
+  });
+
+  final String id;
+  final String? campaignId;
+  final String? campaignTitle;
+  final CustomerInfo? customer;
+
+  // So tien don phai tra
+  final int totalAmount;
+  final int refundedAmount;
+  final DateTime createdAt;
+  final String status;
+  final List<MismatchPayment> payments;
+
+  // Tong so tien thuc nhan tu cong thanh toan
+  int get receivedAmount => payments.fold(0, (sum, p) => sum + p.amount);
+
+  factory PaymentMismatchOrder.fromJson(Map<String, dynamic> json) => PaymentMismatchOrder(
+    id: json['id'] as String,
+    campaignId: json['campaignId'] as String?,
+    campaignTitle: json['campaignTitle'] as String?,
+    customer: CustomerInfo.fromJsonOrNull(json['customer']),
+    totalAmount: asInt(json['totalAmount']),
+    refundedAmount: asInt(json['refundedAmount']),
+    createdAt: asDate(json['createdAt']),
+    status: json['status'] as String? ?? 'PAYMENT_MISMATCH',
+    payments: asList(json['payments'], MismatchPayment.fromJson),
   );
 }

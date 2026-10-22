@@ -1,29 +1,162 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:voucher_platform_web/models/brand.dart';
 import 'package:voucher_platform_web/models/campaign.dart';
 import 'package:voucher_platform_web/models/finance.dart';
+import 'package:voucher_platform_web/models/json_utils.dart';
 import 'package:voucher_platform_web/models/redeem.dart';
 import 'package:voucher_platform_web/utils/format.dart';
 import 'package:voucher_platform_web/utils/validators.dart';
 
 void main() {
-  group('QrPayload (FR-REDEEM-02/05)', () {
-    test('tach dung 4 phan voucherItemId.nonce.expiresAt.signature', () {
-      final p = QrPayload.tryParse('item-1.abc123.1700000000000.sig')!;
-      expect(p.voucherItemId, 'item-1');
-      expect(p.nonce, 'abc123');
+  group('QrPayload v1 (FR-REDEEM-02/05, NFR-SEC-02)', () {
+    const nonce = '0123456789abcdef0123456789abcdef';
+    const sig = 'Zk3_-aBcD0123456789xyzXYZ_abcdefghijklmnopq';
+
+    test('tach dung v1.<nonce 32 hex>.<expiresAtMs>.<chu ky base64url>, giu nguyen chuoi de gui len', () {
+      final p = QrPayload.tryParse(' v1.$nonce.1700000000000.$sig\n')!;
+      expect(p.nonce, nonce);
       expect(p.expiresAt, DateTime.fromMillisecondsSinceEpoch(1700000000000, isUtc: true));
+      expect(p.raw, 'v1.$nonce.1700000000000.$sig', reason: 'gui nguyen chuoi (da bo khoang trang) de may chu kiem chu ky');
     });
 
-    test('chuoi sai dinh dang tra ve null', () {
+    test('tu choi dinh dang cu voucherItemId.nonce.exp.sig', () {
+      expect(QrPayload.tryParse('item-1.abc123.1700000000000.sig'), isNull);
+      expect(QrPayload.tryParse('3f2b8c1e-1111-2222-3333-444455556666.$nonce.1700000000000.$sig'), isNull);
+    });
+
+    test('tu choi sai phien ban', () {
+      expect(QrPayload.tryParse('v2.$nonce.1700000000000.$sig'), isNull);
+      expect(QrPayload.tryParse('V1.$nonce.1700000000000.$sig'), isNull);
+    });
+
+    test('tu choi thieu / thua phan hoac phan sai dang', () {
       expect(QrPayload.tryParse('khong-phai-qr'), isNull);
-      expect(QrPayload.tryParse('a.b.khongphaiso.d'), isNull);
-      expect(QrPayload.tryParse('a..123.d'), isNull);
+      expect(QrPayload.tryParse('v1.$nonce.1700000000000'), isNull, reason: 'thieu chu ky');
+      expect(QrPayload.tryParse('v1.$nonce.1700000000000.$sig.extra'), isNull, reason: 'thua phan');
+      expect(QrPayload.tryParse('v1.abc123.1700000000000.$sig'), isNull, reason: 'nonce khong du 32 hex');
+      expect(QrPayload.tryParse('v1.${nonce.toUpperCase()}.1700000000000.$sig'), isNull, reason: 'nonce phai la hex thuong');
+      expect(QrPayload.tryParse('v1.$nonce.khongphaiso.$sig'), isNull);
+      expect(QrPayload.tryParse('v1.$nonce.-5.$sig'), isNull);
+      expect(QrPayload.tryParse('v1.$nonce.1700000000000.chu+ky/sai='), isNull, reason: 'chu ky phai la base64url');
+      expect(QrPayload.tryParse('v1..1700000000000.$sig'), isNull);
     });
 
     test('het han khi now >= expiresAt', () {
-      final p = QrPayload.tryParse('i.n.1000.s')!;
+      final p = QrPayload.tryParse('v1.$nonce.1000.$sig')!;
       expect(p.isExpired(DateTime.fromMillisecondsSinceEpoch(999, isUtc: true)), isFalse);
       expect(p.isExpired(DateTime.fromMillisecondsSinceEpoch(1000, isUtc: true)), isTrue);
+    });
+  });
+
+  group('Model F11 / F12 / F15 doc JSON moi', () {
+    test('RedeemResult doc campaign, ma voucher, phuong thuc, hoa don', () {
+      final r = RedeemResult.fromJson({
+        'message': 'Xác nhận sử dụng thành công.',
+        'redemptionLogId': 'l1',
+        'voucherItemId': 'v1',
+        'voucherCode': 'HL-ABC123',
+        'redeemedAt': '2026-10-12T03:00:00.000Z',
+        'method': 'QR',
+        'billAmount': null,
+        'billEditableUntil': '2026-10-12T03:10:00.000Z',
+        'campaign': {'id': 'c1', 'title': 'Giảm 50k', 'voucherType': 'PREPAID', 'faceValue': '100000'},
+      });
+      expect(r.voucherCode, 'HL-ABC123');
+      expect(r.method, 'QR');
+      expect(r.billAmount, isNull);
+      expect(r.campaign?.title, 'Giảm 50k');
+      expect(r.campaign?.faceValue, 100000);
+      expect(r.billEditableUntil, DateTime.utc(2026, 10, 12, 3, 10));
+    });
+
+    test('RedemptionLog doc lich su moi, billEditable mac dinh false', () {
+      final log = RedemptionLog.fromJson({
+        'id': 'l1',
+        'voucherItemId': 'v1',
+        'voucherCode': 'HL-1',
+        'campaignTitle': 'Giảm 50k',
+        'storeId': 's1',
+        'storeName': 'Q1',
+        'method': 'OTP',
+        'billAmount': '90000',
+        'redeemedAt': '2026-10-12T02:30:00Z',
+        'billEditable': true,
+      });
+      expect(log.campaignTitle, 'Giảm 50k');
+      expect(log.storeName, 'Q1');
+      expect(log.billAmount, 90000);
+      expect(log.billEditable, isTrue);
+      expect(RedemptionLog.fromJson({'id': 'l2', 'redeemedAt': '2026-10-12T02:30:00Z'}).billEditable, isFalse);
+    });
+
+    test('RefundRequest doc khach hang, giao dich goc; PaymentMismatchOrder cong so tien da nhan', () {
+      final r = RefundRequest.fromJson({
+        'id': 'r1',
+        'voucherItemId': 'v1',
+        'status': 'MANUAL_PENDING',
+        'createdAt': '2026-10-20T00:00:00Z',
+        'amount': '50000',
+        'customer': {'id': 'u1', 'email': 'a@test.vn', 'fullName': 'Nguyễn An', 'phone': null},
+        'payment': {'id': 'p1', 'gateway': 'VNPAY', 'gatewayTxnId': 'TXN1', 'amount': '50000'},
+      });
+      expect(r.amount, 50000);
+      expect(r.customer?.summary, 'Nguyễn An · a@test.vn');
+      expect(r.payment?.gatewayTxnId, 'TXN1');
+      expect(RefundRequest.fromJson({'id': 'r2', 'createdAt': 'x', 'customer': null, 'payment': null}).payment, isNull);
+
+      final o = PaymentMismatchOrder.fromJson({
+        'id': 'o1',
+        'totalAmount': '100000',
+        'refundedAmount': '0',
+        'createdAt': '2026-10-20T00:00:00Z',
+        'status': 'PAYMENT_MISMATCH',
+        'payments': [
+          {'id': 'p1', 'gatewayTxnId': 'T1', 'amount': 80000},
+          {'id': 'p2', 'gatewayTxnId': 'T2', 'amount': '40000'},
+        ],
+      });
+      expect(o.receivedAmount, 120000);
+    });
+
+    test('Review doc truong moi, thieu truong thi mac dinh an toan', () {
+      final r = Review.fromJson({
+        'id': 'rv1',
+        'rating': 4,
+        'createdAt': '2026-10-20T00:00:00Z',
+        'campaignTitle': 'Giảm 50k',
+        'reviewerName': 'An N.',
+        'status': 'HIDDEN',
+      });
+      expect(r.isHidden, isTrue);
+      expect(r.reviewerName, 'An N.');
+      expect(r.withStatus('VISIBLE').isHidden, isFalse);
+      expect(r.withStatus('VISIBLE').campaignTitle, 'Giảm 50k');
+      final old = Review.fromJson({'id': 'rv2', 'rating': '5', 'createdAt': '2026-10-20T00:00:00Z'});
+      expect(old.isHidden, isFalse);
+      expect(old.campaignTitle, isNull);
+    });
+
+    test('PageResult doc trang { items, total, page, pageSize } va mang cu', () {
+      final page = PageResult.fromJson({
+        'items': [
+          {'id': 'rv1', 'rating': 5, 'createdAt': '2026-10-20T00:00:00Z'},
+        ],
+        'total': 21,
+        'page': 1,
+        'pageSize': 20,
+      }, Review.fromJson);
+      expect(page.items, hasLength(1));
+      expect(page.hasMore, isTrue);
+      final legacy = PageResult.fromJson([
+        {'id': 'rv1', 'rating': 5, 'createdAt': '2026-10-20T00:00:00Z'},
+      ], Review.fromJson);
+      expect(legacy.total, 1);
+      expect(legacy.hasMore, isFalse);
+    });
+
+    test('formatTimeDate / formatTime theo gio Viet Nam', () {
+      expect(formatTimeDate(DateTime.utc(2026, 10, 12, 3)), '10:00 12/10/2026');
+      expect(formatTime(DateTime.utc(2026, 10, 12, 17, 5)), '00:05');
     });
   });
 

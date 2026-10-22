@@ -1,0 +1,3809 @@
+From 404a28e3f35a609601898b400b0ac714aeaa210c Mon Sep 17 00:00:00 2001
+From: Diep Tran <trancaodiepnct@gmail.com>
+Date: Wed, 21 Oct 2026 14:56:56 +0700
+Subject: [PATCH] feat(F11-F15): store redeem reasons and bill edit, admin
+ refund queue, review moderation
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- F11 (task 12): send the full qrPayload (format v1), reason-specific result panels (used at / store,
+  wrong store with store list, expired, refund pending), OTP lock banner, BILL_REQUIRED keeps the code.
+- F11 (task 14): redeem history shows campaign / bill, edit bill within 10 minutes.
+- F12 (task 16): admin refund queue with two tabs - manual refunds (transaction code required /
+  "không hoàn được") and payment mismatches.
+- F15 (task 19): admin review moderation screen (hide with reason / unhide), brand list shows hidden badge.
+- Tests: 113 (37 new).
+
+Base: main (b08b91d).
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ lib/models/brand.dart                         |  68 ++-
+ lib/models/finance.dart                       | 136 ++++-
+ lib/models/json_utils.dart                    |  26 +
+ lib/models/redeem.dart                        | 138 +++++-
+ lib/providers/store_session_provider.dart     | 108 +++-
+ lib/routes.dart                               |   3 +
+ lib/screens/admin/refund_admin_screen.dart    | 334 ++++++++++---
+ .../admin/review_moderation_screen.dart       | 287 +++++++++++
+ lib/screens/brand/review_list_screen.dart     |  23 +-
+ lib/screens/store/redeem_history_screen.dart  | 100 +++-
+ lib/screens/store/redeem_screen.dart          | 467 ++++++++++++++----
+ lib/services/api_client.dart                  |  22 +-
+ lib/services/portal_services.dart             |  65 ++-
+ lib/utils/format.dart                         |   9 +
+ lib/widgets/common.dart                       |  71 ++-
+ lib/widgets/portal_shell.dart                 |   1 +
+ test/helpers/fake_backend.dart                |  23 +
+ test/unit/api_client_test.dart                |  92 ++++
+ test/unit/models_and_utils_test.dart          | 151 +++++-
+ test/unit/providers_test.dart                 | 106 +++-
+ test/widget/admin_refund_review_test.dart     | 325 ++++++++++++
+ test/widget/report_contract_test.dart         |   4 +-
+ test/widget/store_redeem_test.dart            | 364 +++++++++++++-
+ 23 files changed, 2663 insertions(+), 260 deletions(-)
+ create mode 100644 lib/screens/admin/review_moderation_screen.dart
+ create mode 100644 test/widget/admin_refund_review_test.dart
+
+diff --git a/lib/models/brand.dart b/lib/models/brand.dart
+index c3b8ed6..5d7fa33 100644
+--- a/lib/models/brand.dart
++++ b/lib/models/brand.dart
+@@ -114,7 +114,16 @@ class StaffMember {
+       );
+ }
+ 
+-// Danh gia cua khach hang va phan hoi cua thuong hieu (FR-ENGAGE-02..05)
++// Trang thai danh gia: quan tri vien an danh gia vi pham (FR-ENGAGE-05)
++class ReviewStatus {
++  ReviewStatus._();
++
++  static const visible = 'VISIBLE';
++  static const hidden = 'HIDDEN';
++}
++
++// Danh gia cua khach hang va phan hoi cua thuong hieu (FR-ENGAGE-02..05).
++// Portal thuong hieu va trang kiem duyet nhan them chien dich, nguoi danh gia, trang thai an / hien.
+ class Review {
+   const Review({
+     required this.id,
+@@ -122,6 +131,14 @@ class Review {
+     required this.createdAt,
+     this.comment,
+     this.brandReply,
++    this.brandRepliedAt,
++    this.campaignId,
++    this.campaignTitle,
++    this.brandId,
++    this.brandName,
++    this.reviewerName,
++    this.voucherItemId,
++    this.status = ReviewStatus.visible,
+   });
+ 
+   final String id;
+@@ -129,8 +146,34 @@ class Review {
+   final DateTime createdAt;
+   final String? comment;
+   final String? brandReply;
++  final DateTime? brandRepliedAt;
++  final String? campaignId;
++  final String? campaignTitle;
++  final String? brandId;
++  final String? brandName;
++  final String? reviewerName;
++  final String? voucherItemId;
++  final String status;
+ 
+   bool get hasReply => brandReply != null && brandReply!.isNotEmpty;
++  bool get isHidden => status == ReviewStatus.hidden;
++
++  // Ket qua an / hien khong kem ten thuong hieu: giu nguyen du lieu cu, chi doi trang thai
++  Review withStatus(String value) => Review(
++        id: id,
++        rating: rating,
++        createdAt: createdAt,
++        comment: comment,
++        brandReply: brandReply,
++        brandRepliedAt: brandRepliedAt,
++        campaignId: campaignId,
++        campaignTitle: campaignTitle,
++        brandId: brandId,
++        brandName: brandName,
++        reviewerName: reviewerName,
++        voucherItemId: voucherItemId,
++        status: value,
++      );
+ 
+   factory Review.fromJson(Map<String, dynamic> json) => Review(
+         id: json['id'] as String,
+@@ -138,5 +181,28 @@ class Review {
+         createdAt: asDate(json['createdAt']),
+         comment: json['comment'] as String?,
+         brandReply: json['brandReply'] as String?,
++        brandRepliedAt: asDateOrNull(json['brandRepliedAt']),
++        campaignId: json['campaignId'] as String?,
++        campaignTitle: json['campaignTitle'] as String?,
++        brandId: json['brandId'] as String?,
++        brandName: json['brandName'] as String?,
++        reviewerName: json['reviewerName'] as String?,
++        voucherItemId: json['voucherItemId'] as String?,
++        status: json['status'] as String? ?? ReviewStatus.visible,
++      );
++}
++
++// Ket qua an / hien danh gia: danh gia sau cap nhat + diem trung binh moi cua chien dich (chi tinh danh gia dang hien)
++class ReviewModeration {
++  const ReviewModeration({required this.review, required this.reviewCount, this.avgRating});
++
++  final Review review;
++  final double? avgRating;
++  final int reviewCount;
++
++  factory ReviewModeration.fromJson(Map<String, dynamic> json) => ReviewModeration(
++        review: Review.fromJson(json),
++        avgRating: asDoubleOrNull(json['avgRating']),
++        reviewCount: asInt(json['reviewCount']),
+       );
+ }
+diff --git a/lib/models/finance.dart b/lib/models/finance.dart
+index fb34e49..9d94dcc 100644
+--- a/lib/models/finance.dart
++++ b/lib/models/finance.dart
+@@ -136,7 +136,52 @@ class AdminDashboard {
+   );
+ }
+ 
+-// Yeu cau hoan tien cho quan tri vien xac nhan thu cong (FR-REFUND-06)
++// Thong tin lien he cua khach de quan tri vien doi chieu khi hoan tien (UC-07)
++class CustomerInfo {
++  const CustomerInfo({required this.id, required this.email, this.fullName, this.phone});
++
++  final String id;
++  final String email;
++  final String? fullName;
++  final String? phone;
++
++  // "Ho ten - email - so dien thoai" (noi bang dau cham giua), bo phan trong
++  String get summary => [
++    if (fullName != null && fullName!.trim().isNotEmpty) fullName!.trim(),
++    email,
++    if (phone != null && phone!.trim().isNotEmpty) phone!.trim(),
++  ].where((s) => s.isNotEmpty).join(' · ');
++
++  static CustomerInfo? fromJsonOrNull(Object? json) => json is Map<String, dynamic>
++      ? CustomerInfo(
++          id: json['id'] as String? ?? '',
++          email: json['email'] as String? ?? '',
++          fullName: json['fullName'] as String?,
++          phone: json['phone'] as String?,
++        )
++      : null;
++}
++
++// Giao dich thanh toan goc cua voucher can hoan
++class RefundPayment {
++  const RefundPayment({required this.id, required this.amount, this.gateway, this.gatewayTxnId});
++
++  final String id;
++  final String? gateway;
++  final String? gatewayTxnId;
++  final int amount;
++
++  static RefundPayment? fromJsonOrNull(Object? json) => json is Map<String, dynamic>
++      ? RefundPayment(
++          id: json['id'] as String? ?? '',
++          gateway: json['gateway'] as String?,
++          gatewayTxnId: json['gatewayTxnId'] as String?,
++          amount: asInt(json['amount']),
++        )
++      : null;
++}
++
++// Yeu cau hoan tien cho quan tri vien xac nhan thu cong (FR-REFUND-06, UC-07)
+ class RefundRequest {
+   const RefundRequest({
+     required this.id,
+@@ -144,6 +189,16 @@ class RefundRequest {
+     required this.status,
+     required this.createdAt,
+     this.reason,
++    this.statusLabel,
++    this.rejectReason,
++    this.decidedAt,
++    this.amount,
++    this.voucherCode,
++    this.voucherStatus,
++    this.campaignId,
++    this.campaignTitle,
++    this.customer,
++    this.payment,
+   });
+ 
+   final String id;
+@@ -151,6 +206,18 @@ class RefundRequest {
+   final String status;
+   final DateTime createdAt;
+   final String? reason;
++  final String? statusLabel;
++  final String? rejectReason;
++  final DateTime? decidedAt;
++
++  // So tien se hoan cho khach (don gia voucher)
++  final int? amount;
++  final String? voucherCode;
++  final String? voucherStatus;
++  final String? campaignId;
++  final String? campaignTitle;
++  final CustomerInfo? customer;
++  final RefundPayment? payment;
+ 
+   factory RefundRequest.fromJson(Map<String, dynamic> json) => RefundRequest(
+     id: json['id'] as String,
+@@ -158,5 +225,72 @@ class RefundRequest {
+     status: json['status'] as String? ?? '',
+     createdAt: asDate(json['createdAt']),
+     reason: json['reason'] as String?,
++    statusLabel: json['statusLabel'] as String?,
++    rejectReason: json['rejectReason'] as String?,
++    decidedAt: asDateOrNull(json['decidedAt']),
++    amount: json['amount'] == null ? null : asInt(json['amount']),
++    voucherCode: json['voucherCode'] as String?,
++    voucherStatus: json['voucherStatus'] as String?,
++    campaignId: json['campaignId'] as String?,
++    campaignTitle: json['campaignTitle'] as String?,
++    customer: CustomerInfo.fromJsonOrNull(json['customer']),
++    payment: RefundPayment.fromJsonOrNull(json['payment']),
++  );
++}
++
++// Giao dich da nhan cua don lech so tien
++class MismatchPayment {
++  const MismatchPayment({required this.id, required this.amount, this.gatewayTxnId});
++
++  final String id;
++  final String? gatewayTxnId;
++  final int amount;
++
++  factory MismatchPayment.fromJson(Map<String, dynamic> json) => MismatchPayment(
++    id: json['id'] as String? ?? '',
++    gatewayTxnId: json['gatewayTxnId'] as String?,
++    amount: asInt(json['amount']),
++  );
++}
++
++// Don hang co so tien nhan duoc khac so tien phai tra (PAYMENT_MISMATCH) - UC-07
++class PaymentMismatchOrder {
++  const PaymentMismatchOrder({
++    required this.id,
++    required this.totalAmount,
++    required this.refundedAmount,
++    required this.createdAt,
++    required this.status,
++    this.campaignId,
++    this.campaignTitle,
++    this.customer,
++    this.payments = const [],
++  });
++
++  final String id;
++  final String? campaignId;
++  final String? campaignTitle;
++  final CustomerInfo? customer;
++
++  // So tien don phai tra
++  final int totalAmount;
++  final int refundedAmount;
++  final DateTime createdAt;
++  final String status;
++  final List<MismatchPayment> payments;
++
++  // Tong so tien thuc nhan tu cong thanh toan
++  int get receivedAmount => payments.fold(0, (sum, p) => sum + p.amount);
++
++  factory PaymentMismatchOrder.fromJson(Map<String, dynamic> json) => PaymentMismatchOrder(
++    id: json['id'] as String,
++    campaignId: json['campaignId'] as String?,
++    campaignTitle: json['campaignTitle'] as String?,
++    customer: CustomerInfo.fromJsonOrNull(json['customer']),
++    totalAmount: asInt(json['totalAmount']),
++    refundedAmount: asInt(json['refundedAmount']),
++    createdAt: asDate(json['createdAt']),
++    status: json['status'] as String? ?? 'PAYMENT_MISMATCH',
++    payments: asList(json['payments'], MismatchPayment.fromJson),
+   );
+ }
+diff --git a/lib/models/json_utils.dart b/lib/models/json_utils.dart
+index d939c67..0991ce4 100644
+--- a/lib/models/json_utils.dart
++++ b/lib/models/json_utils.dart
+@@ -21,3 +21,29 @@ DateTime? asDateOrNull(Object? value) => value is String ? DateTime.tryParse(val
+ 
+ List<T> asList<T>(Object? value, T Function(Map<String, dynamic>) fromJson) =>
+     value is List ? value.whereType<Map<String, dynamic>>().map(fromJson).toList() : <T>[];
++
++// F01: trang ket qua { items, total, page, pageSize }; phan hoi dang mang (cu) coi nhu mot trang duy nhat
++class PageResult<T> {
++  const PageResult({required this.items, required this.total, required this.page, required this.pageSize});
++
++  final List<T> items;
++  final int total;
++  final int page;
++  final int pageSize;
++
++  bool get hasMore => page * pageSize < total;
++
++  factory PageResult.fromJson(Object? json, T Function(Map<String, dynamic>) fromJson) {
++    if (json is Map) {
++      final items = asList(json['items'], fromJson);
++      return PageResult(
++        items: items,
++        total: asInt(json['total'], items.length),
++        page: asInt(json['page'], 1),
++        pageSize: asInt(json['pageSize'], items.isEmpty ? 20 : items.length),
++      );
++    }
++    final items = asList(json, fromJson);
++    return PageResult(items: items, total: items.length, page: 1, pageSize: items.isEmpty ? 20 : items.length);
++  }
++}
+diff --git a/lib/models/redeem.dart b/lib/models/redeem.dart
+index ac9f898..0bbfef9 100644
+--- a/lib/models/redeem.dart
++++ b/lib/models/redeem.dart
+@@ -1,46 +1,137 @@
+ import 'json_utils.dart';
+ 
+-// Noi dung ma QR do app khach hang sinh ra (FR-REDEEM-02): "voucherItemId.nonce.expiresAtMs.signature".
+-// Web cua hang chi gui nonce len may chu; chu ky va han dung duoc may chu kiem tra lai (NFR-SEC-02).
++// Noi dung ma QR do app khach hang sinh ra (FR-REDEEM-02, NFR-SEC-02): "v1.<nonce 32 hex>.<expiresAtMs>.<chu ky base64url>".
++// Ma khong chua id voucher. Web cua hang gui NGUYEN chuoi (raw) len may chu de kiem chu ky HMAC;
++// o day chi tach phan han dung de bao som ma da het han.
+ class QrPayload {
+-  const QrPayload({required this.voucherItemId, required this.nonce, required this.expiresAt});
++  const QrPayload({required this.raw, required this.nonce, required this.expiresAt});
+ 
+-  final String voucherItemId;
++  static const version = 'v1';
++
++  // Chuoi QR day du (da bo khoang trang dau / cuoi) gui len POST /redeem
++  final String raw;
+   final String nonce;
+   final DateTime expiresAt;
+ 
+   bool isExpired(DateTime now) => !now.isBefore(expiresAt);
+ 
+-  // Tra ve null neu chuoi quet duoc khong dung dinh dang
++  static final _nonce = RegExp(r'^[0-9a-f]{32}$');
++  static final _expires = RegExp(r'^\d{1,15}$');
++  static final _signature = RegExp(r'^[A-Za-z0-9_-]+$');
++
++  // Tra ve null neu chuoi quet duoc khong dung dinh dang (sai phien ban, thieu phan, nonce / han / chu ky sai dang)
+   static QrPayload? tryParse(String raw) {
+-    final parts = raw.trim().split('.');
+-    if (parts.length != 4 || parts.any((p) => p.isEmpty)) return null;
+-    final expiresMs = int.tryParse(parts[2]);
+-    if (expiresMs == null) return null;
++    final text = raw.trim();
++    final parts = text.split('.');
++    if (parts.length != 4 || parts[0] != version) return null;
++    if (!_nonce.hasMatch(parts[1]) || !_expires.hasMatch(parts[2]) || !_signature.hasMatch(parts[3])) {
++      return null;
++    }
+     return QrPayload(
+-      voucherItemId: parts[0],
++      raw: text,
+       nonce: parts[1],
+-      expiresAt: DateTime.fromMillisecondsSinceEpoch(expiresMs, isUtc: true),
++      expiresAt: DateTime.fromMillisecondsSinceEpoch(int.parse(parts[2]), isUtc: true),
+     );
+   }
+ }
+ 
++// Ma ly do loi nghiep vu cua POST /redeem (error.reason) - FR-REDEEM-07, FR-REDEEM-12, BR-03, BR-07
++class RedeemReason {
++  RedeemReason._();
++
++  static const voucherUsed = 'VOUCHER_USED';
++  static const wrongStore = 'WRONG_STORE';
++  static const voucherExpired = 'VOUCHER_EXPIRED';
++  static const tokenExpired = 'TOKEN_EXPIRED';
++  static const tokenRevoked = 'TOKEN_REVOKED';
++  static const tokenUsed = 'TOKEN_USED';
++  static const tokenInvalid = 'TOKEN_INVALID';
++  static const refundPending = 'VOUCHER_REFUND_PENDING';
++  static const refunded = 'VOUCHER_REFUNDED';
++  static const otpInvalid = 'OTP_INVALID';
++  static const otpLocked = 'OTP_LOCKED';
++  static const billRequired = 'BILL_REQUIRED';
++  static const storeNotSelected = 'STORE_NOT_SELECTED';
++  static const billEditExpired = 'BILL_EDIT_EXPIRED';
++}
++
++// Ly do xac nhan that bai: thong diep cua may chu + ma ly do + du lieu kem theo (de hien "da dung luc ... tai ...")
++class RedeemFailure {
++  const RedeemFailure(this.message, {this.reason, this.details = const {}});
++
++  final String message;
++  final String? reason;
++  final Map<String, dynamic> details;
++}
++
++// BILL_REQUIRED (BR-03): ma CHUA bi tieu, giu lai QR / OTP vua gui de nhan vien nhap hoa don roi gui lai ngay
++class BillRequirement {
++  const BillRequirement({required this.message, this.qrPayload, this.otpCode, this.voucherType, this.faceValue});
++
++  final String message;
++  final String? qrPayload;
++  final String? otpCode;
++  final String? voucherType;
++  final int? faceValue;
++}
++
++// Chien dich cua voucher vua xac nhan
++class RedeemCampaign {
++  const RedeemCampaign({required this.id, required this.title, required this.voucherType, required this.faceValue});
++
++  final String id;
++  final String title;
++  final String voucherType;
++  final int faceValue;
++
++  factory RedeemCampaign.fromJson(Map<String, dynamic> json) => RedeemCampaign(
++        id: json['id'] as String? ?? '',
++        title: json['title'] as String? ?? '',
++        voucherType: json['voucherType'] as String? ?? '',
++        faceValue: asInt(json['faceValue']),
++      );
++}
++
+ // Ket qua xac nhan su dung tra ve tu POST /redeem
+ class RedeemResult {
+-  const RedeemResult({required this.message, required this.voucherItemId, this.redeemedAt});
++  const RedeemResult({
++    required this.message,
++    required this.voucherItemId,
++    this.redemptionLogId,
++    this.voucherCode,
++    this.redeemedAt,
++    this.method,
++    this.billAmount,
++    this.billEditableUntil,
++    this.campaign,
++  });
+ 
+   final String message;
+   final String voucherItemId;
++  final String? redemptionLogId;
++  final String? voucherCode;
+   final DateTime? redeemedAt;
++  final String? method;
++  final int? billAmount;
++  final DateTime? billEditableUntil;
++  final RedeemCampaign? campaign;
+ 
+   factory RedeemResult.fromJson(Map<String, dynamic> json) => RedeemResult(
+         message: json['message'] as String? ?? 'Xác nhận sử dụng thành công.',
+         voucherItemId: json['voucherItemId'] as String? ?? '',
++        redemptionLogId: json['redemptionLogId'] as String?,
++        voucherCode: json['voucherCode'] as String?,
+         redeemedAt: asDateOrNull(json['redeemedAt']),
++        method: json['method'] as String?,
++        billAmount: json['billAmount'] == null ? null : asInt(json['billAmount']),
++        billEditableUntil: asDateOrNull(json['billEditableUntil']),
++        campaign: json['campaign'] is Map<String, dynamic>
++            ? RedeemCampaign.fromJson(json['campaign'] as Map<String, dynamic>)
++            : null,
+       );
+ }
+ 
+-// Lich su xac nhan trong ca cua nhan vien (FR-REDEEM-10)
++// Lich su xac nhan trong ca cua nhan vien (FR-REDEEM-10); sua hoa don trong 10 phut (FR-REDEEM-08)
+ class RedemptionLog {
+   const RedemptionLog({
+     required this.id,
+@@ -49,6 +140,13 @@ class RedemptionLog {
+     required this.method,
+     required this.redeemedAt,
+     this.billAmount,
++    this.voucherCode,
++    this.campaignTitle,
++    this.voucherType,
++    this.storeName,
++    this.billUpdatedAt,
++    this.billEditableUntil,
++    this.billEditable = false,
+   });
+ 
+   final String id;
+@@ -57,6 +155,13 @@ class RedemptionLog {
+   final String method;
+   final DateTime redeemedAt;
+   final int? billAmount;
++  final String? voucherCode;
++  final String? campaignTitle;
++  final String? voucherType;
++  final String? storeName;
++  final DateTime? billUpdatedAt;
++  final DateTime? billEditableUntil;
++  final bool billEditable;
+ 
+   factory RedemptionLog.fromJson(Map<String, dynamic> json) => RedemptionLog(
+         id: json['id'] as String,
+@@ -65,5 +170,12 @@ class RedemptionLog {
+         method: json['method'] as String? ?? 'QR',
+         redeemedAt: asDate(json['redeemedAt']),
+         billAmount: json['billAmount'] == null ? null : asInt(json['billAmount']),
++        voucherCode: json['voucherCode'] as String?,
++        campaignTitle: json['campaignTitle'] as String?,
++        voucherType: json['voucherType'] as String?,
++        storeName: json['storeName'] as String?,
++        billUpdatedAt: asDateOrNull(json['billUpdatedAt']),
++        billEditableUntil: asDateOrNull(json['billEditableUntil']),
++        billEditable: json['billEditable'] == true,
+       );
+ }
+diff --git a/lib/providers/store_session_provider.dart b/lib/providers/store_session_provider.dart
+index d3b8c1e..119762e 100644
+--- a/lib/providers/store_session_provider.dart
++++ b/lib/providers/store_session_provider.dart
+@@ -1,7 +1,9 @@
+ import 'package:flutter/foundation.dart';
+ 
+ import '../models/brand.dart';
++import '../models/json_utils.dart';
+ import '../models/redeem.dart';
++import '../services/api_client.dart';
+ import '../services/portal_services.dart';
+ 
+ // Ca lam viec cua nhan vien cua hang: chi nhanh dang lam (FR-AUTH-12, BR-07), ket qua xac nhan gan nhat,
+@@ -11,6 +13,9 @@ class StoreSessionProvider extends ChangeNotifier {
+ 
+   final RedeemService _service;
+ 
++  // FR-REDEEM-12: thieu thoi diem mo khoa tu may chu thi khoa theo mac dinh 15 phut
++  static const defaultOtpLock = Duration(minutes: 15);
++
+   List<Store> _stores = const [];
+   Store? _current;
+   bool _loadingStores = false;
+@@ -18,7 +23,9 @@ class StoreSessionProvider extends ChangeNotifier {
+ 
+   bool _submitting = false;
+   RedeemResult? _lastResult;
+-  String? _lastError;
++  RedeemFailure? _lastFailure;
++  BillRequirement? _billRequirement;
++  DateTime? _otpLockedUntil;
+ 
+   List<RedemptionLog> _history = const [];
+ 
+@@ -28,9 +35,14 @@ class StoreSessionProvider extends ChangeNotifier {
+   String? get storesError => _storesError;
+   bool get isSubmitting => _submitting;
+   RedeemResult? get lastResult => _lastResult;
+-  String? get lastError => _lastError;
++  RedeemFailure? get lastFailure => _lastFailure;
++  String? get lastError => _lastFailure?.message;
++  BillRequirement? get billRequirement => _billRequirement;
++  DateTime? get otpLockedUntil => _otpLockedUntil;
+   List<RedemptionLog> get history => _history;
+ 
++  bool isOtpLocked(DateTime now) => _otpLockedUntil != null && now.isBefore(_otpLockedUntil!);
++
+   Future<void> loadStores() async {
+     _loadingStores = true;
+     _storesError = null;
+@@ -51,7 +63,7 @@ class StoreSessionProvider extends ChangeNotifier {
+   }
+ 
+   Future<void> selectStore(Store store) async {
+-    // FR-AUTH-12: server binds the selected branch to this session.
++    // FR-AUTH-12: may chu gan chi nhanh vao phien (POST /auth/select-store) truoc khi cho redeem
+     await _service.selectStore(store.id);
+     _current = store;
+     clearResult();
+@@ -59,29 +71,72 @@ class StoreSessionProvider extends ChangeNotifier {
+ 
+   void clearResult() {
+     _lastResult = null;
+-    _lastError = null;
++    _lastFailure = null;
++    _billRequirement = null;
+     notifyListeners();
+   }
+ 
+-  // FR-REDEEM-05/06/07: gui nonce (tu QR) hoac OTP; thanh cong thi tai lai lich su ca
+-  Future<bool> redeem({String? nonce, String? otpCode, int? billAmount}) async {
++  // FR-REDEEM-05: kiem tra nhanh dinh dang + han cua chuoi QR roi gui NGUYEN chuoi len may chu (kiem chu ky)
++  Future<bool> redeemQr(String raw, {int? billAmount}) async {
++    if (_current == null || _submitting) return false;
++    final payload = QrPayload.tryParse(raw);
++    if (payload == null) {
++      return _failLocally(RedeemReason.tokenInvalid, 'Mã QR không đúng định dạng của hệ thống.');
++    }
++    if (payload.isExpired(DateTime.now().toUtc())) {
++      return _failLocally(RedeemReason.tokenExpired, 'Mã QR đã hết hạn, nhờ khách làm mới mã trên ứng dụng.');
++    }
++    return redeem(qrPayload: payload.raw, billAmount: billAmount);
++  }
++
++  // BR-03: gui lai dung ma vua bi BILL_REQUIRED, lan nay kem gia tri hoa don
++  Future<bool> resubmitWithBill(int billAmount) async {
++    final pending = _billRequirement;
++    if (pending == null) return false;
++    return redeem(qrPayload: pending.qrPayload, otpCode: pending.otpCode, billAmount: billAmount);
++  }
++
++  // FR-REDEEM-05/06/07: gui mot trong hai (chuoi QR hoac OTP); thanh cong thi tai lai lich su ca
++  Future<bool> redeem({String? qrPayload, String? otpCode, int? billAmount}) async {
+     final store = _current;
+     if (store == null || _submitting) return false;
++    if ((qrPayload == null) == (otpCode == null)) return false;
++    // FR-REDEEM-12: o nhap OTP dang bi khoa thi khong gui, van quet QR duoc
++    if (otpCode != null && isOtpLocked(DateTime.now())) return false;
+     _submitting = true;
+     _lastResult = null;
+-    _lastError = null;
++    _lastFailure = null;
++    _billRequirement = null;
+     notifyListeners();
+     try {
+       _lastResult = await _service.redeem(
+         storeId: store.id,
+-        nonce: nonce,
++        qrPayload: qrPayload,
+         otpCode: otpCode,
+         billAmount: billAmount,
+       );
+       await _reloadHistorySilently();
+       return true;
++    } on ApiException catch (e) {
++      final details = e.details ?? const <String, dynamic>{};
++      switch (e.reason) {
++        case RedeemReason.billRequired:
++          // Ma chua bi tieu: giu lai de gui lai kem hoa don, khong phai ket qua cuoi
++          _billRequirement = BillRequirement(
++            message: e.message,
++            qrPayload: qrPayload,
++            otpCode: otpCode,
++            voucherType: details['voucherType'] as String?,
++            faceValue: details['faceValue'] == null ? null : asInt(details['faceValue']),
++          );
++        case RedeemReason.otpLocked:
++          _otpLockedUntil = asDateOrNull(details['lockedUntil']) ?? DateTime.now().toUtc().add(defaultOtpLock);
++        default:
++          _lastFailure = RedeemFailure(e.message, reason: e.reason, details: details);
++      }
++      return false;
+     } catch (e) {
+-      _lastError = e.toString();
++      _lastFailure = RedeemFailure(e.toString());
+       return false;
+     } finally {
+       _submitting = false;
+@@ -89,11 +144,42 @@ class StoreSessionProvider extends ChangeNotifier {
+     }
+   }
+ 
++  // O nhap OTP het thoi gian khoa
++  void clearOtpLockIfExpired(DateTime now) {
++    if (_otpLockedUntil != null && !isOtpLocked(now)) {
++      _otpLockedUntil = null;
++      notifyListeners();
++    }
++  }
++
++  bool _failLocally(String reason, String message) {
++    _lastResult = null;
++    _billRequirement = null;
++    _lastFailure = RedeemFailure(message, reason: reason);
++    notifyListeners();
++    return false;
++  }
++
+   Future<void> loadHistory() async {
+     _history = await _service.historyToday();
+     notifyListeners();
+   }
+ 
++  // FR-REDEEM-08: sua hoa don trong 10 phut; het han (BILL_EDIT_EXPIRED) thi tai lai lich su de an nut sua
++  Future<void> updateBill(String logId, int billAmount) async {
++    try {
++      final updated = await _service.updateBill(logId, billAmount);
++      _history = [for (final log in _history) log.id == updated.id ? updated : log];
++      notifyListeners();
++    } on ApiException catch (e) {
++      if (e.reason == RedeemReason.billEditExpired) {
++        await _reloadHistorySilently();
++        notifyListeners();
++      }
++      rethrow;
++    }
++  }
++
+   Future<void> _reloadHistorySilently() async {
+     try {
+       _history = await _service.historyToday();
+@@ -107,7 +193,9 @@ class StoreSessionProvider extends ChangeNotifier {
+     _current = null;
+     _history = const [];
+     _lastResult = null;
+-    _lastError = null;
++    _lastFailure = null;
++    _billRequirement = null;
++    _otpLockedUntil = null;
+     notifyListeners();
+   }
+ }
+diff --git a/lib/routes.dart b/lib/routes.dart
+index cc87793..96c517a 100644
+--- a/lib/routes.dart
++++ b/lib/routes.dart
+@@ -7,6 +7,7 @@ import 'screens/admin/brand_approval_screen.dart';
+ import 'screens/admin/campaign_approval_screen.dart';
+ import 'screens/admin/commission_config_screen.dart';
+ import 'screens/admin/refund_admin_screen.dart';
++import 'screens/admin/review_moderation_screen.dart';
+ import 'screens/admin/settlement_admin_screen.dart';
+ import 'screens/auth/login_screen.dart';
+ import 'screens/brand/brand_profile_screen.dart';
+@@ -51,6 +52,7 @@ class AppRoutes {
+   static const adminSettlements = '/admin/settlements';
+   static const adminCommission = '/admin/commission';
+   static const adminRefunds = '/admin/refunds';
++  static const adminReviews = '/admin/reviews';
+ 
+   // Trang chu theo vai tro sau khi dang nhap
+   static String homeOf(String? role) => switch (role) {
+@@ -117,6 +119,7 @@ class AppRoutes {
+         adminSettlements => const SettlementAdminScreen(),
+         adminCommission => const CommissionConfigScreen(),
+         adminRefunds => const RefundAdminScreen(),
++        adminReviews => const ReviewModerationScreen(),
+         _ => const NotFoundScreen(),
+       };
+ }
+diff --git a/lib/screens/admin/refund_admin_screen.dart b/lib/screens/admin/refund_admin_screen.dart
+index a89a4e3..0c15729 100644
+--- a/lib/screens/admin/refund_admin_screen.dart
++++ b/lib/screens/admin/refund_admin_screen.dart
+@@ -9,7 +9,10 @@ import '../../utils/format.dart';
+ import '../../widgets/common.dart';
+ import '../../widgets/portal_shell.dart';
+ 
+-// FR-REFUND-06: cong thanh toan khong hoan tu dong duoc -> quan tri vien hoan thu cong roi xac nhan tren he thong
++// UC-07, FR-REFUND-06: hang doi hoan tien thu cong cua quan tri vien.
++//  - Tab 1: yeu cau hoan tien cong thanh toan khong hoan tu dong duoc -> hoan tay roi xac nhan / bao khong hoan duoc.
++//  - Tab 2: don thanh toan lech so tien -> hoan lai so tien da nhan, don chuyen sang da huy.
++// DC-12: tong tien hoan khong vuot so tien da nhan, may chu luon kiem tra lai.
+ class RefundAdminScreen extends StatefulWidget {
+   const RefundAdminScreen({super.key});
+ 
+@@ -18,104 +21,301 @@ class RefundAdminScreen extends StatefulWidget {
+ }
+ 
+ class _RefundAdminScreenState extends State<RefundAdminScreen> {
+-  late Future<List<RefundRequest>> _future;
++  late Future<List<RefundRequest>> _refunds;
++  late Future<List<PaymentMismatchOrder>> _mismatches;
++  bool _busy = false;
+ 
+   AdminService get _service => context.read<AdminService>();
+ 
+   @override
+   void initState() {
+     super.initState();
+-    _future = _service.manualPendingRefunds();
++    _refunds = _service.manualPendingRefunds();
++    _mismatches = _service.paymentMismatches();
+   }
+ 
+   void _reload() {
+     setState(() {
+-      _future = _service.manualPendingRefunds();
++      _refunds = _service.manualPendingRefunds();
++      _mismatches = _service.paymentMismatches();
+     });
+   }
+ 
+-  Future<void> _confirm(RefundRequest r) async {
+-    final ok = await confirmDialog(
++  // Loi tu may chu (vd. DC-12 "So tien hoan vuot giao dich da nhan.") hien nguyen van
++  Future<void> _guard(Future<void> Function() action, String success) async {
++    setState(() => _busy = true);
++    try {
++      await action();
++      if (!mounted) return;
++      showMessage(context, success);
++      _reload();
++    } catch (e) {
++      if (mounted) showMessage(context, e.toString(), error: true);
++    } finally {
++      if (mounted) setState(() => _busy = false);
++    }
++  }
++
++  // Da hoan tay: bat buoc ma giao dich hoan
++  Future<void> _confirmManual(RefundRequest r) async {
++    final amount = r.amount == null ? 'tiền' : formatVnd(r.amount!);
++    final reference = await promptTextDialog(
+       context,
+       title: 'Xác nhận đã hoàn tiền',
+-      message: 'Chỉ xác nhận sau khi đã chuyển tiền hoàn cho khách qua cổng thanh toán hoặc ngân hàng.',
+-      confirm: 'Đã hoàn tiền',
++      message: 'Chỉ xác nhận sau khi đã chuyển $amount cho khách qua cổng thanh toán hoặc ngân hàng.',
++      label: 'Mã giao dịch hoàn tiền',
++    );
++    if (reference == null) return;
++    await _guard(() => _service.confirmManualRefund(r.id, reference), 'Đã xác nhận hoàn tiền.');
++  }
++
++  // Khong hoan duoc: bat buoc ly do, voucher duoc khoi phuc cho khach
++  Future<void> _failManual(RefundRequest r) async {
++    final reason = await promptTextDialog(
++      context,
++      title: 'Không hoàn được tiền',
++      message: 'Yêu cầu sẽ chuyển sang thất bại và voucher được khôi phục cho khách.',
++      label: 'Lý do không hoàn được',
++      maxLines: 3,
+     );
+-    if (!ok) return;
+-    if (!mounted) return;
++    if (reason == null) return;
++    await _guard(
++      () => _service.failManualRefund(r.id, reason),
++      'Đã ghi nhận không hoàn được, voucher đã được khôi phục cho khách.',
++    );
++  }
++
++  Future<void> _confirmMismatch(PaymentMismatchOrder o) async {
++    final remaining = o.receivedAmount - o.refundedAmount;
+     final reference = await promptTextDialog(
+       context,
+-      title: 'Ghi nhận giao dịch hoàn tiền',
++      title: 'Xác nhận đã hoàn tiền',
++      message: 'Chỉ xác nhận sau khi đã hoàn ${formatVnd(remaining)} đã nhận cho khách. Đơn sẽ chuyển sang Đã hủy.',
+       label: 'Mã giao dịch hoàn tiền',
+     );
+     if (reference == null) return;
+-    try {
+-      await _service.confirmManualRefund(r.id, reference);
+-      if (!mounted) return;
+-      showMessage(context, 'Đã xác nhận hoàn tiền.');
+-      _reload();
+-    } catch (e) {
+-      if (mounted) showMessage(context, e.toString(), error: true);
+-    }
++    await _guard(
++      () => _service.confirmMismatchRefund(o.id, reference),
++      'Đã ghi nhận hoàn tiền, đơn đã chuyển sang Đã hủy.',
++    );
+   }
+ 
++  EdgeInsets get _listPadding => const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.lg);
++
+   @override
+   Widget build(BuildContext context) => PortalShell(
+     currentRoute: AppRoutes.adminRefunds,
+-    child: Column(
+-      crossAxisAlignment: CrossAxisAlignment.stretch,
+-      children: [
+-        PageHeader(
+-          title: 'Hoàn tiền thủ công',
+-          subtitle: 'Yêu cầu ở trạng thái chờ hoàn thủ công',
+-          actions: [
+-            IconButton(
+-              tooltip: 'Tải lại',
+-              onPressed: _reload,
+-              icon: const Icon(Icons.refresh),
+-            ),
+-          ],
+-        ),
+-        Expanded(
+-          child: AsyncBody<List<RefundRequest>>(
+-            future: _future,
+-            onRetry: _reload,
+-            isEmpty: (list) => list.isEmpty,
+-            emptyMessage: 'Không có yêu cầu nào cần xử lý thủ công.',
+-            builder: (context, list) => ListView.separated(
+-              padding: const EdgeInsets.fromLTRB(
+-                AppSpacing.lg,
+-                0,
+-                AppSpacing.lg,
+-                AppSpacing.lg,
++    child: DefaultTabController(
++      length: 2,
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.stretch,
++        children: [
++          PageHeader(
++            title: 'Hàng đợi hoàn tiền',
++            subtitle: 'Tổng tiền hoàn không bao giờ vượt quá số tiền khách đã thanh toán (DC-12), máy chủ luôn kiểm tra lại.',
++            actions: [
++              IconButton(
++                tooltip: 'Tải lại',
++                onPressed: _reload,
++                icon: const Icon(Icons.refresh),
+               ),
+-              itemCount: list.length,
+-              separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+-              itemBuilder: (context, i) {
+-                final r = list[i];
+-                return Card(
+-                  child: ListTile(
+-                    leading: const Icon(Icons.currency_exchange),
+-                    title: Text('Yêu cầu ngày ${formatDateTime(r.createdAt)}'),
+-                    subtitle: Text(
+-                      r.reason == null || r.reason!.isEmpty
+-                          ? 'Không ghi lý do'
+-                          : 'Lý do: ${r.reason}',
++            ],
++          ),
++          const Padding(
++            padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
++            child: TabBar(
++              tabs: [
++                Tab(text: 'Hoàn tiền thủ công'),
++                Tab(text: 'Đơn lệch số tiền'),
++              ],
++            ),
++          ),
++          Expanded(
++            child: TabBarView(
++              children: [
++                AsyncBody<List<RefundRequest>>(
++                  future: _refunds,
++                  onRetry: _reload,
++                  isEmpty: (list) => list.isEmpty,
++                  emptyMessage: 'Không có yêu cầu nào cần xử lý thủ công.',
++                  builder: (context, list) => ListView.separated(
++                    padding: _listPadding,
++                    itemCount: list.length,
++                    separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
++                    itemBuilder: (context, i) => _RefundCard(
++                      refund: list[i],
++                      onConfirm: _busy ? null : () => _confirmManual(list[i]),
++                      onFail: _busy ? null : () => _failManual(list[i]),
+                     ),
+-                    trailing: FilledButton(
+-                      style: FilledButton.styleFrom(
+-                        minimumSize: const Size(0, 40),
+-                      ),
+-                      onPressed: () => _confirm(r),
+-                      child: const Text('Đã hoàn tiền'),
++                  ),
++                ),
++                AsyncBody<List<PaymentMismatchOrder>>(
++                  future: _mismatches,
++                  onRetry: _reload,
++                  isEmpty: (list) => list.isEmpty,
++                  emptyMessage: 'Không có đơn nào lệch số tiền.',
++                  builder: (context, list) => ListView.separated(
++                    padding: _listPadding,
++                    itemCount: list.length,
++                    separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
++                    itemBuilder: (context, i) => _MismatchCard(
++                      order: list[i],
++                      onConfirm: _busy ? null : () => _confirmMismatch(list[i]),
+                     ),
+                   ),
+-                );
+-              },
++                ),
++              ],
+             ),
+           ),
+-        ),
+-      ],
++        ],
++      ),
+     ),
+   );
+ }
++
++// Mot dong "Nhan: gia tri" trong the
++class _InfoLine extends StatelessWidget {
++  const _InfoLine(this.label, this.value, {this.emphasize = false});
++
++  final String label;
++  final String value;
++  final bool emphasize;
++
++  @override
++  Widget build(BuildContext context) => Padding(
++    padding: const EdgeInsets.only(top: AppSpacing.xs),
++    child: Text.rich(
++      TextSpan(
++        children: [
++          TextSpan(text: '$label: ', style: const TextStyle(color: AppColors.textSecondary)),
++          TextSpan(text: value, style: emphasize ? const TextStyle(fontWeight: FontWeight.w700) : null),
++        ],
++      ),
++    ),
++  );
++}
++
++class _RefundCard extends StatelessWidget {
++  const _RefundCard({required this.refund, this.onConfirm, this.onFail});
++
++  final RefundRequest refund;
++  final VoidCallback? onConfirm;
++  final VoidCallback? onFail;
++
++  @override
++  Widget build(BuildContext context) {
++    final r = refund;
++    final payment = r.payment;
++    return Card(
++      child: Padding(
++        padding: const EdgeInsets.all(AppSpacing.md),
++        child: Column(
++          crossAxisAlignment: CrossAxisAlignment.start,
++          children: [
++            Row(
++              children: [
++                const Icon(Icons.currency_exchange, color: AppColors.primary),
++                const SizedBox(width: AppSpacing.sm),
++                Expanded(
++                  child: Text(
++                    r.campaignTitle ?? 'Voucher',
++                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
++                  ),
++                ),
++                StatusChip(r.status, label: r.statusLabel),
++              ],
++            ),
++            _InfoLine('Mã voucher', r.voucherCode ?? r.voucherItemId),
++            _InfoLine('Số tiền cần hoàn', r.amount == null ? 'Chưa xác định' : formatVnd(r.amount!), emphasize: true),
++            _InfoLine('Khách hàng', r.customer?.summary ?? 'Không rõ'),
++            _InfoLine(
++              'Giao dịch gốc',
++              payment == null
++                  ? 'Không tìm thấy giao dịch đã nhận'
++                  : [
++                      if (payment.gateway != null) payment.gateway!,
++                      if (payment.gatewayTxnId != null) 'mã ${payment.gatewayTxnId}',
++                      formatVnd(payment.amount),
++                    ].join(' · '),
++            ),
++            _InfoLine('Lý do', r.reason == null || r.reason!.isEmpty ? 'Không ghi lý do' : r.reason!),
++            _InfoLine('Yêu cầu lúc', formatDateTime(r.createdAt)),
++            const SizedBox(height: AppSpacing.sm),
++            Wrap(
++              spacing: AppSpacing.sm,
++              runSpacing: AppSpacing.sm,
++              children: [
++                FilledButton.icon(
++                  key: Key('refund-confirm-${r.id}'),
++                  style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
++                  onPressed: onConfirm,
++                  icon: const Icon(Icons.done_all),
++                  label: const Text('Đã hoàn tiền'),
++                ),
++                OutlinedButton.icon(
++                  key: Key('refund-fail-${r.id}'),
++                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
++                  onPressed: onFail,
++                  icon: const Icon(Icons.block),
++                  label: const Text('Không hoàn được'),
++                ),
++              ],
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
++class _MismatchCard extends StatelessWidget {
++  const _MismatchCard({required this.order, this.onConfirm});
++
++  final PaymentMismatchOrder order;
++  final VoidCallback? onConfirm;
++
++  @override
++  Widget build(BuildContext context) {
++    final o = order;
++    final diff = o.receivedAmount - o.totalAmount;
++    return Card(
++      child: Padding(
++        padding: const EdgeInsets.all(AppSpacing.md),
++        child: Column(
++          crossAxisAlignment: CrossAxisAlignment.start,
++          children: [
++            Row(
++              children: [
++                const Icon(Icons.rule, color: AppColors.secondary),
++                const SizedBox(width: AppSpacing.sm),
++                Expanded(
++                  child: Text(
++                    o.campaignTitle ?? 'Đơn hàng',
++                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
++                  ),
++                ),
++                StatusChip(o.status),
++              ],
++            ),
++            _InfoLine('Mã đơn', o.id),
++            _InfoLine('Khách hàng', o.customer?.summary ?? 'Không rõ'),
++            _InfoLine('Số tiền phải trả', formatVnd(o.totalAmount)),
++            _InfoLine('Số tiền đã nhận', formatVnd(o.receivedAmount), emphasize: true),
++            if (diff != 0) _InfoLine(diff > 0 ? 'Nhận thừa' : 'Nhận thiếu', formatVnd(diff.abs())),
++            for (final p in o.payments) _InfoLine('Giao dịch', '${p.gatewayTxnId ?? p.id} · ${formatVnd(p.amount)}'),
++            if (o.refundedAmount > 0) _InfoLine('Đã hoàn', formatVnd(o.refundedAmount)),
++            _InfoLine('Tạo lúc', formatDateTime(o.createdAt)),
++            const SizedBox(height: AppSpacing.sm),
++            FilledButton.icon(
++              key: Key('mismatch-confirm-${o.id}'),
++              style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
++              onPressed: onConfirm,
++              icon: const Icon(Icons.done_all),
++              label: const Text('Đã hoàn tiền'),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
+diff --git a/lib/screens/admin/review_moderation_screen.dart b/lib/screens/admin/review_moderation_screen.dart
+new file mode 100644
+index 0000000..851e4d0
+--- /dev/null
++++ b/lib/screens/admin/review_moderation_screen.dart
+@@ -0,0 +1,287 @@
++import 'package:flutter/material.dart';
++import 'package:provider/provider.dart';
++
++import '../../models/brand.dart';
++import '../../routes.dart';
++import '../../services/portal_services.dart';
++import '../../theme/app_theme.dart';
++import '../../utils/format.dart';
++import '../../widgets/common.dart';
++import '../../widgets/portal_shell.dart';
++
++// FR-ENGAGE-05 (F15): quan tri vien xem danh gia cua moi thuong hieu, an danh gia vi pham (bat buoc ly do,
++// ghi AuditLog) hoac hien lai. Danh gia bi an khong tinh vao diem trung binh cua chien dich.
++class ReviewModerationScreen extends StatefulWidget {
++  const ReviewModerationScreen({super.key});
++
++  @override
++  State<ReviewModerationScreen> createState() => _ReviewModerationScreenState();
++}
++
++class _ReviewModerationScreenState extends State<ReviewModerationScreen> {
++  static const _pageSize = 20;
++
++  // null = tat ca
++  String? _status;
++  final List<Review> _items = [];
++  int _page = 0;
++  int _total = 0;
++  bool _loading = false;
++  bool _busy = false;
++  String? _error;
++
++  // Bo qua ket qua cua lan tai cu khi nguoi dung da doi bo loc
++  int _generation = 0;
++
++  AdminService get _service => context.read<AdminService>();
++
++  bool get _hasMore => _items.length < _total;
++
++  @override
++  void initState() {
++    super.initState();
++    _load(reset: true);
++  }
++
++  Future<void> _load({bool reset = false}) async {
++    final generation = reset ? ++_generation : _generation;
++    setState(() {
++      _loading = true;
++      _error = null;
++      if (reset) {
++        _items.clear();
++        _page = 0;
++        _total = 0;
++      }
++    });
++    try {
++      final page = await _service.reviews(status: _status, page: _page + 1, pageSize: _pageSize);
++      if (!mounted || generation != _generation) return;
++      setState(() {
++        _items.addAll(page.items);
++        _page = page.page;
++        _total = page.total;
++      });
++    } catch (e) {
++      if (mounted && generation == _generation) setState(() => _error = e.toString());
++    } finally {
++      if (mounted && generation == _generation) setState(() => _loading = false);
++    }
++  }
++
++  void _setFilter(String? status) {
++    if (status == _status) return;
++    _status = status;
++    _load(reset: true);
++  }
++
++  Future<void> _hide(Review r) async {
++    final reason = await promptTextDialog(
++      context,
++      title: 'Ẩn đánh giá',
++      message: 'Đánh giá bị ẩn sẽ không hiển thị công khai và không tính vào điểm trung bình của chiến dịch.',
++      label: 'Lý do ẩn',
++      confirm: 'Ẩn',
++      maxLines: 3,
++    );
++    if (reason == null) return;
++    await _moderate(() => _service.hideReview(r.id, reason), r, 'Đã ẩn đánh giá.');
++  }
++
++  Future<void> _unhide(Review r) async {
++    final ok = await confirmDialog(
++      context,
++      title: 'Hiện lại đánh giá',
++      message: 'Đánh giá sẽ hiển thị công khai và được tính lại vào điểm trung bình của chiến dịch.',
++      confirm: 'Hiện lại',
++    );
++    if (!ok) return;
++    await _moderate(() => _service.unhideReview(r.id), r, 'Đã hiện lại đánh giá.');
++  }
++
++  // Cap nhat tai cho (khong tai lai ca danh sach); dang loc theo trang thai thi bo danh gia khong con khop
++  Future<void> _moderate(Future<ReviewModeration> Function() action, Review r, String done) async {
++    setState(() => _busy = true);
++    try {
++      final result = await action();
++      if (!mounted) return;
++      setState(() {
++        final index = _items.indexWhere((e) => e.id == r.id);
++        if (index >= 0) {
++          if (_status != null && result.review.status != _status) {
++            _items.removeAt(index);
++            _total = _total > 0 ? _total - 1 : 0;
++          } else {
++            _items[index] = r.withStatus(result.review.status);
++          }
++        }
++      });
++      final avg = result.avgRating;
++      showMessage(
++        context,
++        avg == null
++            ? '$done Chiến dịch chưa có đánh giá đang hiển thị.'
++            : '$done Điểm trung bình chiến dịch: ${avg.toStringAsFixed(1)}',
++      );
++    } catch (e) {
++      if (mounted) showMessage(context, e.toString(), error: true);
++    } finally {
++      if (mounted) setState(() => _busy = false);
++    }
++  }
++
++  @override
++  Widget build(BuildContext context) => PortalShell(
++        currentRoute: AppRoutes.adminReviews,
++        child: Column(
++          crossAxisAlignment: CrossAxisAlignment.stretch,
++          children: [
++            PageHeader(
++              title: 'Kiểm duyệt đánh giá',
++              subtitle: _loading && _items.isEmpty ? null : '$_total đánh giá',
++              actions: [
++                IconButton(tooltip: 'Tải lại', onPressed: () => _load(reset: true), icon: const Icon(Icons.refresh)),
++              ],
++            ),
++            Padding(
++              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.md),
++              child: Wrap(
++                spacing: AppSpacing.sm,
++                children: [
++                  for (final (status, label) in const [
++                    (null, 'Tất cả'),
++                    (ReviewStatus.visible, 'Đang hiển thị'),
++                    (ReviewStatus.hidden, 'Đã ẩn'),
++                  ])
++                    ChoiceChip(
++                      label: Text(label),
++                      selected: _status == status,
++                      onSelected: (_) => _setFilter(status),
++                    ),
++                ],
++              ),
++            ),
++            Expanded(child: _body()),
++          ],
++        ),
++      );
++
++  Widget _body() {
++    if (_items.isEmpty) {
++      if (_loading) return const Center(child: CircularProgressIndicator());
++      if (_error != null) {
++        return MessageView(icon: Icons.cloud_off, message: _error!, onRetry: () => _load(reset: true));
++      }
++      return const MessageView(icon: Icons.inbox_outlined, message: 'Không có đánh giá nào.');
++    }
++    return ListView.separated(
++      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
++      itemCount: _items.length + 1,
++      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
++      itemBuilder: (context, i) {
++        if (i < _items.length) {
++          final r = _items[i];
++          return _ReviewCard(
++            review: r,
++            onHide: _busy || r.isHidden ? null : () => _hide(r),
++            onUnhide: _busy || !r.isHidden ? null : () => _unhide(r),
++          );
++        }
++        return _footer();
++      },
++    );
++  }
++
++  // F01: phan trang, tai them trang tiep theo
++  Widget _footer() {
++    if (_loading) return const Center(child: Padding(padding: EdgeInsets.all(AppSpacing.md), child: CircularProgressIndicator()));
++    if (_error != null) {
++      return Column(
++        children: [
++          Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.danger)),
++          TextButton(onPressed: _load, child: const Text('Thử lại')),
++        ],
++      );
++    }
++    if (!_hasMore) return const SizedBox.shrink();
++    return Center(
++      child: OutlinedButton.icon(
++        key: const Key('reviews-load-more'),
++        onPressed: _load,
++        icon: const Icon(Icons.expand_more),
++        label: const Text('Tải thêm'),
++      ),
++    );
++  }
++}
++
++class _ReviewCard extends StatelessWidget {
++  const _ReviewCard({required this.review, this.onHide, this.onUnhide});
++
++  final Review review;
++  final VoidCallback? onHide;
++  final VoidCallback? onUnhide;
++
++  @override
++  Widget build(BuildContext context) {
++    final r = review;
++    return Card(
++      child: Padding(
++        padding: const EdgeInsets.all(AppSpacing.md),
++        child: Column(
++          crossAxisAlignment: CrossAxisAlignment.start,
++          children: [
++            Row(
++              children: [
++                for (var s = 1; s <= 5; s++)
++                  Icon(s <= r.rating ? Icons.star : Icons.star_border, color: AppColors.secondary, size: 20),
++                const Spacer(),
++                StatusChip(r.status),
++              ],
++            ),
++            const SizedBox(height: AppSpacing.xs),
++            Text(
++              [r.campaignTitle ?? 'Chiến dịch', if (r.brandName != null && r.brandName!.isNotEmpty) r.brandName!].join(' · '),
++              style: const TextStyle(fontWeight: FontWeight.w700),
++            ),
++            Text(
++              '${r.reviewerName ?? 'Khách hàng'} · ${formatDateTime(r.createdAt)}',
++              style: const TextStyle(color: AppColors.textSecondary),
++            ),
++            if (r.comment != null && r.comment!.isNotEmpty) ...[
++              const SizedBox(height: AppSpacing.xs),
++              Text(r.comment!),
++            ],
++            if (r.hasReply) ...[
++              const SizedBox(height: AppSpacing.sm),
++              Container(
++                width: double.infinity,
++                padding: const EdgeInsets.all(AppSpacing.sm),
++                decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(8)),
++                child: Text('Phản hồi của thương hiệu: ${r.brandReply}'),
++              ),
++            ],
++            const SizedBox(height: AppSpacing.sm),
++            Align(
++              alignment: Alignment.centerRight,
++              child: r.isHidden
++                  ? OutlinedButton.icon(
++                      key: Key('review-unhide-${r.id}'),
++                      onPressed: onUnhide,
++                      icon: const Icon(Icons.visibility_outlined),
++                      label: const Text('Hiện lại'),
++                    )
++                  : OutlinedButton.icon(
++                      key: Key('review-hide-${r.id}'),
++                      style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
++                      onPressed: onHide,
++                      icon: const Icon(Icons.visibility_off_outlined),
++                      label: const Text('Ẩn'),
++                    ),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
+diff --git a/lib/screens/brand/review_list_screen.dart b/lib/screens/brand/review_list_screen.dart
+index 74fc9d5..583d976 100644
+--- a/lib/screens/brand/review_list_screen.dart
++++ b/lib/screens/brand/review_list_screen.dart
+@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
+ 
+ import '../../models/brand.dart';
+ import '../../routes.dart';
++import '../../services/api_client.dart';
+ import '../../services/portal_services.dart';
+ import '../../theme/app_theme.dart';
+ import '../../utils/format.dart';
+@@ -10,7 +11,8 @@ import '../../widgets/brand_gate.dart';
+ import '../../widgets/common.dart';
+ import '../../widgets/portal_shell.dart';
+ 
+-// FR-ENGAGE-04: thuong hieu xem danh gia va phan hoi mot lan cho moi danh gia
++// FR-ENGAGE-04: thuong hieu xem danh gia va phan hoi mot lan cho moi danh gia.
++// FR-ENGAGE-05: danh gia bi quan tri vien an van hien o day (kem nhan "Da bi an") va van phan hoi duoc.
+ class ReviewListScreen extends StatelessWidget {
+   const ReviewListScreen({super.key});
+ 
+@@ -56,7 +58,10 @@ class _ReviewListState extends State<_ReviewList> {
+       showMessage(context, 'Đã gửi phản hồi.');
+       _reload();
+     } catch (e) {
+-      if (mounted) showMessage(context, e.toString(), error: true);
++      if (!mounted) return;
++      showMessage(context, e.toString(), error: true);
++      // Da co phan hoi truoc do (vd. tab khac): tai lai de hien phan hoi
++      if (e is ApiException && e.reason == 'REVIEW_ALREADY_REPLIED') _reload();
+     }
+   }
+ 
+@@ -92,6 +97,20 @@ class _ReviewListState extends State<_ReviewList> {
+                             const Spacer(),
+                             Text(formatDateTime(r.createdAt), style: const TextStyle(color: AppColors.textSecondary)),
+                           ]),
++                          const SizedBox(height: AppSpacing.xs),
++                          Wrap(
++                            spacing: AppSpacing.sm,
++                            crossAxisAlignment: WrapCrossAlignment.center,
++                            children: [
++                              if (r.campaignTitle != null && r.campaignTitle!.isNotEmpty)
++                                Text(r.campaignTitle!, style: const TextStyle(fontWeight: FontWeight.w700)),
++                              if (r.isHidden) const StatusChip(ReviewStatus.hidden, label: 'Đã bị ẩn'),
++                            ],
++                          ),
++                          Text(
++                            r.reviewerName ?? 'Khách hàng',
++                            style: const TextStyle(color: AppColors.textSecondary),
++                          ),
+                           if (r.comment != null && r.comment!.isNotEmpty) ...[
+                             const SizedBox(height: AppSpacing.xs),
+                             Text(r.comment!),
+diff --git a/lib/screens/store/redeem_history_screen.dart b/lib/screens/store/redeem_history_screen.dart
+index ee5c192..12e6231 100644
+--- a/lib/screens/store/redeem_history_screen.dart
++++ b/lib/screens/store/redeem_history_screen.dart
+@@ -1,14 +1,17 @@
+ import 'package:flutter/material.dart';
+ import 'package:provider/provider.dart';
+ 
++import '../../models/redeem.dart';
+ import '../../providers/store_session_provider.dart';
+ import '../../routes.dart';
+ import '../../theme/app_theme.dart';
+ import '../../utils/format.dart';
++import '../../utils/validators.dart';
+ import '../../widgets/common.dart';
+ import '../../widgets/portal_shell.dart';
+ 
+-// FR-REDEEM-10: nhan vien xem cac lan xac nhan do chinh minh thuc hien trong ngay
++// FR-REDEEM-10: nhan vien xem cac lan xac nhan do chinh minh thuc hien trong ngay.
++// FR-REDEEM-08: sua gia tri hoa don trong 10 phut sau khi xac nhan.
+ class RedeemHistoryScreen extends StatefulWidget {
+   const RedeemHistoryScreen({super.key});
+ 
+@@ -31,6 +34,29 @@ class _RedeemHistoryScreenState extends State<RedeemHistoryScreen> {
+     });
+   }
+ 
++  Future<void> _editBill(RedemptionLog log) async {
++    final until = log.billEditableUntil;
++    final text = await promptTextDialog(
++      context,
++      title: 'Sửa giá trị hóa đơn',
++      label: 'Giá trị hóa đơn (VND)',
++      confirm: 'Lưu',
++      message: until == null
++          ? 'Chỉ sửa được trong 10 phút sau khi xác nhận.'
++          : 'Chỉ sửa được trong 10 phút sau khi xác nhận (đến ${formatTime(until)}).',
++      initialValue: log.billAmount?.toString(),
++      keyboardType: TextInputType.number,
++      validator: (v) => validateMoney(v, 'giá trị hóa đơn'),
++    );
++    if (text == null || !mounted) return;
++    try {
++      await context.read<StoreSessionProvider>().updateBill(log.id, parseMoney(text)!);
++      if (mounted) showMessage(context, 'Đã cập nhật giá trị hóa đơn.');
++    } catch (e) {
++      if (mounted) showMessage(context, e.toString(), error: true);
++    }
++  }
++
+   @override
+   Widget build(BuildContext context) {
+     final session = context.watch<StoreSessionProvider>();
+@@ -57,16 +83,10 @@ class _RedeemHistoryScreenState extends State<RedeemHistoryScreen> {
+                 separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+                 itemBuilder: (context, i) {
+                   final log = session.history[i];
+-                  return Card(
+-                    child: ListTile(
+-                      leading: Icon(log.method == 'QR' ? Icons.qr_code : Icons.pin_outlined, color: AppColors.success),
+-                      title: Text(formatDateTime(log.redeemedAt)),
+-                      subtitle: Text([
+-                        'Phương thức ${log.method}',
+-                        storeNames[log.storeId] ?? 'Chi nhánh khác',
+-                        if (log.billAmount != null) 'Hóa đơn ${formatVnd(log.billAmount!)}',
+-                      ].join(' · ')),
+-                    ),
++                  return _HistoryCard(
++                    log: log,
++                    storeName: log.storeName ?? storeNames[log.storeId] ?? 'Chi nhánh khác',
++                    onEditBill: log.billEditable ? () => _editBill(log) : null,
+                   );
+                 },
+               ),
+@@ -77,3 +97,61 @@ class _RedeemHistoryScreenState extends State<RedeemHistoryScreen> {
+     );
+   }
+ }
++
++class _HistoryCard extends StatelessWidget {
++  const _HistoryCard({required this.log, required this.storeName, this.onEditBill});
++
++  final RedemptionLog log;
++  final String storeName;
++  final VoidCallback? onEditBill;
++
++  @override
++  Widget build(BuildContext context) => Card(
++        child: Padding(
++          padding: const EdgeInsets.all(AppSpacing.md),
++          child: Row(
++            crossAxisAlignment: CrossAxisAlignment.start,
++            children: [
++              Icon(log.method == 'QR' ? Icons.qr_code : Icons.pin_outlined, color: AppColors.success),
++              const SizedBox(width: AppSpacing.md),
++              Expanded(
++                child: Column(
++                  crossAxisAlignment: CrossAxisAlignment.start,
++                  children: [
++                    Text(
++                      log.campaignTitle ?? 'Voucher',
++                      style: const TextStyle(fontWeight: FontWeight.w700),
++                    ),
++                    const SizedBox(height: AppSpacing.xs),
++                    Text(
++                      [
++                        if (log.voucherCode != null && log.voucherCode!.isNotEmpty) 'Mã ${log.voucherCode}',
++                        storeName,
++                      ].join(' · '),
++                      style: const TextStyle(color: AppColors.textSecondary),
++                    ),
++                    Text(
++                      [
++                        formatDateTime(log.redeemedAt),
++                        'Phương thức ${log.method}',
++                        if (log.billAmount != null) 'Hóa đơn ${formatVnd(log.billAmount!)}',
++                      ].join(' · '),
++                      style: const TextStyle(color: AppColors.textSecondary),
++                    ),
++                    if (onEditBill != null) ...[
++                      const SizedBox(height: AppSpacing.sm),
++                      OutlinedButton.icon(
++                        key: Key('edit-bill-${log.id}'),
++                        onPressed: onEditBill,
++                        icon: const Icon(Icons.edit_outlined, size: 18),
++                        label: const Text('Sửa hóa đơn'),
++                      ),
++                    ],
++                  ],
++                ),
++              ),
++            ],
++          ),
++        ),
++      );
++}
+diff --git a/lib/screens/store/redeem_screen.dart b/lib/screens/store/redeem_screen.dart
+index e942210..e6632d4 100644
+--- a/lib/screens/store/redeem_screen.dart
++++ b/lib/screens/store/redeem_screen.dart
+@@ -1,6 +1,9 @@
++import 'dart:async';
++
+ import 'package:flutter/material.dart';
+ import 'package:provider/provider.dart';
+ 
++import '../../models/json_utils.dart';
+ import '../../models/redeem.dart';
+ import '../../providers/store_session_provider.dart';
+ import '../../routes.dart';
+@@ -47,136 +50,200 @@ class _RedeemPanel extends StatefulWidget {
+   State<_RedeemPanel> createState() => _RedeemPanelState();
+ }
+ 
+-class _RedeemPanelState extends State<_RedeemPanel> {
++class _RedeemPanelState extends State<_RedeemPanel> with SingleTickerProviderStateMixin {
++  late final _tabs = TabController(length: 2, vsync: this);
+   final _otpFormKey = GlobalKey<FormState>();
+   final _otp = TextEditingController();
+   final _bill = TextEditingController();
++  final _billFocus = FocusNode();
+   bool _cameraOn = false;
+-  String? _localError;
++  String? _billError;
++  Timer? _lockTicker;
++
++  @override
++  void initState() {
++    super.initState();
++    _syncLockTicker();
++  }
+ 
+   @override
+   void dispose() {
++    _lockTicker?.cancel();
++    _tabs.dispose();
+     _otp.dispose();
+     _bill.dispose();
++    _billFocus.dispose();
+     super.dispose();
+   }
+ 
+-  // Gia tri hoa don khong bat buoc; nhap sai dinh dang thi bao loi thay vi bo qua
+-  int? _billAmount() => parseMoney(_bill.text);
++  int? get _billAmount => parseMoney(_bill.text);
+ 
+-  bool _billValid() {
+-    if (_bill.text.trim().isEmpty) return true;
+-    if (_billAmount() == null) {
+-      setState(() => _localError = 'Giá trị hóa đơn không hợp lệ');
+-      return false;
++  // Gia tri hoa don: de trong la khong gui (tru khi may chu bao BILL_REQUIRED), sai dinh dang thi bao loi tai o nhap
++  bool _validateBill({String? requiredMessage}) {
++    final text = _bill.text.trim();
++    String? error;
++    if (text.isEmpty) {
++      error = requiredMessage;
++    } else if (_billAmount == null || _billAmount! < 0) {
++      error = 'Giá trị hóa đơn không hợp lệ';
+     }
+-    return true;
++    setState(() => _billError = error);
++    if (error != null) _billFocus.requestFocus();
++    return error == null;
+   }
+ 
+   Future<void> _onScanned(String raw) async {
+     final session = context.read<StoreSessionProvider>();
+-    if (session.isSubmitting || session.lastResult != null || session.lastError != null) return;
+-    setState(() => _localError = null);
+-    final payload = QrPayload.tryParse(raw);
+-    if (payload == null) {
+-      setState(() => _localError = 'Mã QR không đúng định dạng của hệ thống.');
+-      return;
+-    }
+-    if (payload.isExpired(DateTime.now().toUtc())) {
+-      setState(() => _localError = 'Mã QR đã hết hạn, nhờ khách làm mới mã trên ứng dụng.');
+-      return;
+-    }
+-    if (!_billValid()) return;
+-    await session.redeem(nonce: payload.nonce, billAmount: _billAmount());
++    // Dang hien ket qua hoac cho nhap hoa don: bo qua lan quet moi cho toi khi nhan vien xu ly xong
++    if (session.isSubmitting || _hasOutcome(session) || session.billRequirement != null) return;
++    if (!_validateBill()) return;
++    await session.redeemQr(raw, billAmount: _billAmount);
++    _afterSubmit(session);
+   }
+ 
+   Future<void> _submitOtp() async {
+-    setState(() => _localError = null);
+-    if (!_otpFormKey.currentState!.validate() || !_billValid()) return;
+-    final ok = await context.read<StoreSessionProvider>().redeem(otpCode: _otp.text.trim(), billAmount: _billAmount());
++    final session = context.read<StoreSessionProvider>();
++    if (session.isOtpLocked(DateTime.now())) return;
++    final otpValid = _otpFormKey.currentState!.validate();
++    if (!otpValid || !_validateBill()) return;
++    final ok = await session.redeem(otpCode: _otp.text.trim(), billAmount: _billAmount);
++    if (ok) _otp.clear();
++    _afterSubmit(session);
++  }
++
++  // BR-03: gui lai dung ma vua quet / nhap, lan nay kem gia tri hoa don
++  Future<void> _resubmitWithBill() async {
++    final session = context.read<StoreSessionProvider>();
++    final requirement = session.billRequirement;
++    if (requirement == null || !_validateBill(requiredMessage: _billRequiredText(requirement))) return;
++    final ok = await session.resubmitWithBill(_billAmount!);
+     if (ok) _otp.clear();
++    _afterSubmit(session);
++  }
++
++  void _afterSubmit(StoreSessionProvider session) {
++    if (!mounted) return;
++    if (session.billRequirement != null) _billFocus.requestFocus();
++    _syncLockTicker();
++    final failure = session.lastFailure;
++    if (failure?.reason == RedeemReason.storeNotSelected) {
++      // Phien chua gan chi nhanh (vd. dang nhap lai): chon lai chi nhanh roi xac nhan tiep
++      showMessage(context, failure!.message, error: true);
++      AppRoutes.go(context, AppRoutes.storeSelect);
++    }
++  }
++
++  // FR-REDEEM-12: dem nguoc thoi gian khoa o nhap OTP, het khoa thi mo lai
++  void _syncLockTicker() {
++    final session = context.read<StoreSessionProvider>();
++    if (!session.isOtpLocked(DateTime.now())) {
++      _lockTicker?.cancel();
++      _lockTicker = null;
++      return;
++    }
++    _lockTicker ??= Timer.periodic(const Duration(seconds: 1), (_) {
++      if (!mounted) return;
++      final now = DateTime.now();
++      if (session.isOtpLocked(now)) {
++        setState(() {});
++      } else {
++        _lockTicker?.cancel();
++        _lockTicker = null;
++        session.clearOtpLockIfExpired(now);
++      }
++    });
+   }
+ 
+   void _next() {
+-    setState(() => _localError = null);
++    setState(() => _billError = null);
+     _bill.clear();
++    _otp.clear();
+     context.read<StoreSessionProvider>().clearResult();
+   }
+ 
++  bool _hasOutcome(StoreSessionProvider session) => session.lastResult != null || session.lastFailure != null;
++
+   @override
+   Widget build(BuildContext context) {
+     final session = context.watch<StoreSessionProvider>();
+-    final hasOutcome = session.lastResult != null || session.lastError != null || _localError != null;
++    final requirement = session.billRequirement;
+ 
+-    return DefaultTabController(
+-      length: 2,
+-      child: ListView(
+-        padding: const EdgeInsets.all(AppSpacing.lg),
+-        children: [
+-          Center(
+-            child: ConstrainedBox(
+-              constraints: const BoxConstraints(maxWidth: 520),
+-              child: Column(
+-                crossAxisAlignment: CrossAxisAlignment.stretch,
+-                children: [
+-                  Text('Xác nhận sử dụng voucher',
+-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+-                  const SizedBox(height: AppSpacing.md),
+-                  if (hasOutcome) ...[
+-                    _ResultPanel(result: session.lastResult, error: _localError ?? session.lastError),
+-                    const SizedBox(height: AppSpacing.sm),
+-                    FilledButton.icon(
+-                      key: const Key('redeem-next'),
+-                      onPressed: _next,
+-                      icon: const Icon(Icons.arrow_forward),
+-                      label: const Text('Khách tiếp theo'),
+-                    ),
+-                    const SizedBox(height: AppSpacing.lg),
+-                  ],
+-                  const TabBar(tabs: [
+-                    Tab(icon: Icon(Icons.qr_code_scanner), text: 'Quét QR'),
+-                    Tab(icon: Icon(Icons.pin_outlined), text: 'Nhập OTP'),
+-                  ]),
+-                  const SizedBox(height: AppSpacing.md),
+-                  TextField(
+-                    key: const Key('redeem-bill'),
+-                    controller: _bill,
+-                    keyboardType: TextInputType.number,
+-                    decoration: const InputDecoration(
+-                      labelText: 'Giá trị hóa đơn (VND)',
+-                      helperText: 'Bắt buộc với voucher mệnh giá, không bắt buộc với loại khác (FR-REDEEM-08)',
+-                    ),
++    return ListView(
++      padding: const EdgeInsets.all(AppSpacing.lg),
++      children: [
++        Center(
++          child: ConstrainedBox(
++            constraints: const BoxConstraints(maxWidth: 520),
++            child: Column(
++              crossAxisAlignment: CrossAxisAlignment.stretch,
++              children: [
++                Text('Xác nhận sử dụng voucher',
++                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
++                const SizedBox(height: AppSpacing.md),
++                if (_hasOutcome(session)) ...[
++                  _ResultPanel(result: session.lastResult, failure: session.lastFailure),
++                  const SizedBox(height: AppSpacing.sm),
++                  FilledButton.icon(
++                    key: const Key('redeem-next'),
++                    onPressed: _next,
++                    icon: const Icon(Icons.arrow_forward),
++                    label: const Text('Khách tiếp theo'),
+                   ),
+-                  const SizedBox(height: AppSpacing.md),
+-                  SizedBox(
+-                    height: 460,
+-                    child: TabBarView(
+-                      physics: const NeverScrollableScrollPhysics(),
+-                      children: [
+-                        _qrTab(session),
+-                        _otpTab(session),
+-                      ],
+-                    ),
++                  const SizedBox(height: AppSpacing.lg),
++                ],
++                TabBar(controller: _tabs, tabs: const [
++                  Tab(icon: Icon(Icons.qr_code_scanner), text: 'Quét QR'),
++                  Tab(icon: Icon(Icons.pin_outlined), text: 'Nhập OTP'),
++                ]),
++                const SizedBox(height: AppSpacing.md),
++                TextField(
++                  key: const Key('redeem-bill'),
++                  controller: _bill,
++                  focusNode: _billFocus,
++                  keyboardType: TextInputType.number,
++                  onChanged: (_) {
++                    if (_billError != null) setState(() => _billError = null);
++                  },
++                  decoration: InputDecoration(
++                    labelText: 'Giá trị hóa đơn (VND)',
++                    helperText: 'Bắt buộc với voucher mệnh giá, không bắt buộc với loại khác (FR-REDEEM-08)',
++                    errorText: _billError ?? (requirement == null ? null : _billRequiredText(requirement)),
++                    errorMaxLines: 2,
++                  ),
++                ),
++                if (requirement != null) ...[
++                  const SizedBox(height: AppSpacing.sm),
++                  _BillRequiredActions(
++                    submitting: session.isSubmitting,
++                    onResubmit: _resubmitWithBill,
++                    onCancel: _next,
+                   ),
+                 ],
+-              ),
++                const SizedBox(height: AppSpacing.md),
++                SizedBox(
++                  height: 460,
++                  child: TabBarView(
++                    controller: _tabs,
++                    physics: const NeverScrollableScrollPhysics(),
++                    children: [
++                      _qrTab(session, paused: session.isSubmitting || _hasOutcome(session) || requirement != null),
++                      _otpTab(session),
++                    ],
++                  ),
++                ),
++              ],
+             ),
+           ),
+-        ],
+-      ),
++        ),
++      ],
+     );
+   }
+ 
+-  Widget _qrTab(StoreSessionProvider session) => Column(
++  Widget _qrTab(StoreSessionProvider session, {required bool paused}) => Column(
+         crossAxisAlignment: CrossAxisAlignment.stretch,
+         children: [
+           if (_cameraOn)
+-            Expanded(
+-              child: QrScannerView(
+-                onDetect: _onScanned,
+-                paused: session.isSubmitting || session.lastResult != null || session.lastError != null,
+-              ),
+-            )
++            Expanded(child: QrScannerView(onDetect: _onScanned, paused: paused))
+           else
+             Expanded(
+               child: Container(
+@@ -199,14 +266,27 @@ class _RedeemPanelState extends State<_RedeemPanel> {
+         ],
+       );
+ 
+-  Widget _otpTab(StoreSessionProvider session) => Form(
++  Widget _otpTab(StoreSessionProvider session) {
++    final now = DateTime.now();
++    final locked = session.isOtpLocked(now);
++    return SingleChildScrollView(
++      child: Form(
+         key: _otpFormKey,
+         child: Column(
+           crossAxisAlignment: CrossAxisAlignment.stretch,
+           children: [
++            if (locked) ...[
++              _OtpLockedBanner(
++                lockedUntil: session.otpLockedUntil!,
++                remaining: session.otpLockedUntil!.difference(now),
++                onScanQr: () => _tabs.animateTo(0),
++              ),
++              const SizedBox(height: AppSpacing.md),
++            ],
+             TextFormField(
+               key: const Key('redeem-otp'),
+               controller: _otp,
++              enabled: !locked,
+               keyboardType: TextInputType.number,
+               maxLength: 6,
+               textAlign: TextAlign.center,
+@@ -218,7 +298,7 @@ class _RedeemPanelState extends State<_RedeemPanel> {
+             const SizedBox(height: AppSpacing.md),
+             FilledButton(
+               key: const Key('redeem-otp-submit'),
+-              onPressed: session.isSubmitting ? null : _submitOtp,
++              onPressed: session.isSubmitting || locked ? null : _submitOtp,
+               child: Text(session.isSubmitting ? 'Đang xác nhận...' : 'Xác nhận sử dụng'),
+             ),
+             const SizedBox(height: AppSpacing.sm),
+@@ -229,19 +309,168 @@ class _RedeemPanelState extends State<_RedeemPanel> {
+             ),
+           ],
+         ),
++      ),
++    );
++  }
++}
++
++// BR-03: thong bao bat buoc nhap hoa don kem menh gia voucher
++String _billRequiredText(BillRequirement r) => (r.faceValue ?? 0) > 0
++    ? 'Voucher mệnh giá ${formatVnd(r.faceValue!)} bắt buộc nhập giá trị hóa đơn'
++    : 'Voucher mệnh giá bắt buộc nhập giá trị hóa đơn';
++
++// BILL_REQUIRED: ma cua khach chua bi tieu, nhap hoa don roi gui lai ngay voi dung ma do
++class _BillRequiredActions extends StatelessWidget {
++  const _BillRequiredActions({required this.submitting, required this.onResubmit, required this.onCancel});
++
++  final bool submitting;
++  final VoidCallback onResubmit;
++  final VoidCallback onCancel;
++
++  @override
++  Widget build(BuildContext context) => Container(
++        key: const Key('redeem-bill-required'),
++        padding: const EdgeInsets.all(AppSpacing.md),
++        decoration: BoxDecoration(
++          color: AppColors.secondary.withValues(alpha: 0.12),
++          borderRadius: BorderRadius.circular(12),
++          border: Border.all(color: AppColors.secondary),
++        ),
++        child: Column(
++          crossAxisAlignment: CrossAxisAlignment.stretch,
++          children: [
++            const Text(
++              'Mã của khách vẫn còn hiệu lực. Nhập giá trị hóa đơn rồi gửi lại, không cần quét lại mã.',
++              style: TextStyle(fontWeight: FontWeight.w600),
++            ),
++            const SizedBox(height: AppSpacing.sm),
++            Wrap(
++              spacing: AppSpacing.sm,
++              runSpacing: AppSpacing.sm,
++              children: [
++                FilledButton.icon(
++                  key: const Key('redeem-resubmit'),
++                  onPressed: submitting ? null : onResubmit,
++                  icon: const Icon(Icons.send),
++                  label: const Text('Gửi lại kèm hóa đơn'),
++                ),
++                TextButton(onPressed: submitting ? null : onCancel, child: const Text('Hủy')),
++              ],
++            ),
++          ],
++        ),
+       );
+ }
+ 
++// FR-REDEEM-12: o nhap OTP bi khoa, hien thoi diem mo khoa + dem nguoc; van quet QR duoc
++class _OtpLockedBanner extends StatelessWidget {
++  const _OtpLockedBanner({required this.lockedUntil, required this.remaining, required this.onScanQr});
++
++  final DateTime lockedUntil;
++  final Duration remaining;
++  final VoidCallback onScanQr;
++
++  @override
++  Widget build(BuildContext context) {
++    final seconds = remaining.inSeconds < 0 ? 0 : remaining.inSeconds;
++    final countdown = '${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
++    return Container(
++      key: const Key('redeem-otp-locked'),
++      padding: const EdgeInsets.all(AppSpacing.md),
++      decoration: BoxDecoration(
++        color: AppColors.danger.withValues(alpha: 0.08),
++        borderRadius: BorderRadius.circular(12),
++        border: Border.all(color: AppColors.danger),
++      ),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          Row(
++            children: [
++              const Icon(Icons.lock_clock, color: AppColors.danger),
++              const SizedBox(width: AppSpacing.sm),
++              Expanded(
++                child: Text(
++                  'Ô nhập OTP bị khóa đến ${formatTime(lockedUntil)}, hãy quét mã QR',
++                  style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700),
++                ),
++              ),
++            ],
++          ),
++          const SizedBox(height: AppSpacing.xs),
++          Text('Mở khóa sau $countdown', style: const TextStyle(color: AppColors.textSecondary)),
++          TextButton.icon(
++            onPressed: onScanQr,
++            icon: const Icon(Icons.qr_code_scanner),
++            label: const Text('Chuyển sang quét QR'),
++          ),
++        ],
++      ),
++    );
++  }
++}
++
++// Noi dung khung ket qua that bai: tieu de lon + mot dong chi tiet (+ danh sach chi nhanh khi sai chi nhanh)
++class _FailureView {
++  const _FailureView(this.headline, this.detail, [this.bullets = const []]);
++
++  final String headline;
++  final String detail;
++  final List<String> bullets;
++}
++
++// FR-REDEEM-07: moi ma ly do cua may chu -> tieu de ngan nhan vien doc duoc ngay
++_FailureView _describeFailure(RedeemFailure f) {
++  switch (f.reason) {
++    case RedeemReason.voucherUsed:
++      final usedAt = asDateOrNull(f.details['usedAt']);
++      final storeName = f.details['storeName'] as String?;
++      if (usedAt == null && (storeName == null || storeName.isEmpty)) return _FailureView('ĐÃ SỬ DỤNG', f.message);
++      return _FailureView('ĐÃ SỬ DỤNG', [
++        'Đã dùng',
++        if (usedAt != null) 'lúc ${formatTimeDate(usedAt)}',
++        if (storeName != null && storeName.isNotEmpty) 'tại $storeName',
++      ].join(' '));
++    case RedeemReason.wrongStore:
++      final stores = f.details['stores'];
++      final bullets = [
++        if (stores is List)
++          for (final s in stores.whereType<Map>())
++            [s['name'], s['address']].whereType<String>().where((v) => v.isNotEmpty).join(' — '),
++      ].where((s) => s.isNotEmpty).toList();
++      return bullets.isEmpty ? _FailureView('SAI CHI NHÁNH', f.message) : _FailureView('SAI CHI NHÁNH', 'Áp dụng tại:', bullets);
++    case RedeemReason.voucherExpired:
++      return _FailureView('VOUCHER HẾT HẠN', f.message);
++    case RedeemReason.tokenExpired:
++      return const _FailureView('MÃ ĐÃ HẾT HẠN', 'Nhờ khách làm mới mã trên ứng dụng rồi quét / nhập lại.');
++    case RedeemReason.tokenRevoked || RedeemReason.tokenUsed || RedeemReason.tokenInvalid:
++      return _FailureView('MÃ KHÔNG HỢP LỆ', f.message);
++    case RedeemReason.refundPending:
++      return _FailureView('ĐANG CHỜ HOÀN TIỀN', f.message);
++    case RedeemReason.refunded:
++      return _FailureView('ĐÃ HOÀN TIỀN', f.message);
++    case RedeemReason.otpInvalid:
++      return _FailureView('SAI MÃ OTP', f.message);
++    case RedeemReason.storeNotSelected:
++      return _FailureView('CHƯA CHỌN CHI NHÁNH', f.message);
++    default:
++      return _FailureView('KHÔNG HỢP LỆ', f.message);
++  }
++}
++
+ class _ResultPanel extends StatelessWidget {
+-  const _ResultPanel({required this.result, required this.error});
++  const _ResultPanel({required this.result, required this.failure});
+ 
+   final RedeemResult? result;
+-  final String? error;
++  final RedeemFailure? failure;
++
++  static const _white = TextStyle(color: Colors.white, fontSize: 16);
+ 
+   @override
+   Widget build(BuildContext context) {
+-    final success = error == null && result != null;
++    final success = failure == null && result != null;
+     final color = success ? AppColors.success : AppColors.danger;
++    final children = success ? _successLines(result!) : _failureLines(_describeFailure(failure!));
+     return Container(
+       key: Key(success ? 'redeem-success' : 'redeem-error'),
+       padding: const EdgeInsets.all(AppSpacing.lg),
+@@ -250,20 +479,54 @@ class _ResultPanel extends StatelessWidget {
+         children: [
+           Icon(success ? Icons.check_circle : Icons.cancel, color: Colors.white, size: 72),
+           const SizedBox(height: AppSpacing.sm),
+-          Text(
+-            success ? 'HỢP LỆ' : 'KHÔNG HỢP LỆ',
+-            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w800),
+-          ),
++          ...children,
++        ],
++      ),
++    );
++  }
++
++  static Widget _headline(String text) => Text(
++        text,
++        textAlign: TextAlign.center,
++        style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w800),
++      );
++
++  List<Widget> _successLines(RedeemResult r) => [
++        _headline('HỢP LỆ'),
++        if (r.campaign != null && r.campaign!.title.isNotEmpty) ...[
+           const SizedBox(height: AppSpacing.xs),
+           Text(
+-            success
+-                ? 'Đã xác nhận lúc ${formatDateTime(result!.redeemedAt ?? DateTime.now())}'
+-                : error!,
++            r.campaign!.title,
+             textAlign: TextAlign.center,
+-            style: const TextStyle(color: Colors.white, fontSize: 16),
++            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700),
+           ),
+         ],
+-      ),
+-    );
+-  }
++        const SizedBox(height: AppSpacing.xs),
++        if (r.voucherCode != null && r.voucherCode!.isNotEmpty)
++          Text('Mã voucher: ${r.voucherCode}', textAlign: TextAlign.center, style: _white),
++        Text(
++          [
++            'Xác nhận lúc ${formatTimeDate(r.redeemedAt ?? DateTime.now())}',
++            if (r.method != null) r.method == 'OTP' ? 'Mã OTP' : 'Quét QR',
++          ].join(' · '),
++          textAlign: TextAlign.center,
++          style: _white,
++        ),
++        if (r.billAmount != null)
++          Text('Hóa đơn: ${formatVnd(r.billAmount!)}', textAlign: TextAlign.center, style: _white),
++      ];
++
++  List<Widget> _failureLines(_FailureView view) => [
++        _headline(view.headline),
++        const SizedBox(height: AppSpacing.xs),
++        Text(view.detail, textAlign: TextAlign.center, style: _white),
++        if (view.bullets.isNotEmpty)
++          Padding(
++            padding: const EdgeInsets.only(top: AppSpacing.xs),
++            child: Column(
++              crossAxisAlignment: CrossAxisAlignment.start,
++              children: [for (final b in view.bullets) Text('• $b', style: _white)],
++            ),
++          ),
++      ];
+ }
+diff --git a/lib/services/api_client.dart b/lib/services/api_client.dart
+index 69365d3..e94477f 100644
+--- a/lib/services/api_client.dart
++++ b/lib/services/api_client.dart
+@@ -2,12 +2,15 @@ import 'dart:convert';
+ 
+ import 'package:http/http.dart' as http;
+ 
+-// Loi tra ve tu API, message da duoc chuan hoa de hien thi cho nguoi dung (NFR-USA-02)
++// Loi tra ve tu API, message da duoc chuan hoa de hien thi cho nguoi dung (NFR-USA-02).
++// Loi nghiep vu co them reason (ma ly do, vd. VOUCHER_USED) va details (du lieu kem theo) de man hinh hien chi tiet.
+ class ApiException implements Exception {
+-  const ApiException(this.message, {this.statusCode});
++  const ApiException(this.message, {this.statusCode, this.reason, this.details});
+ 
+   final String message;
+   final int? statusCode;
++  final String? reason;
++  final Map<String, dynamic>? details;
+ 
+   @override
+   String toString() => message;
+@@ -94,6 +97,8 @@ class ApiClient {
+       throw ApiException(
+         _messageOf(decoded) ?? 'Đã có lỗi xảy ra, vui lòng thử lại.',
+         statusCode: response.statusCode,
++        reason: _reasonOf(decoded),
++        details: _detailsOf(decoded),
+       );
+     }
+     return unwrap(decoded);
+@@ -123,4 +128,17 @@ class ApiClient {
+     if (message is List) return message.join('\n');
+     return message?.toString();
+   }
++
++  // F01: loi nghiep vu { error: { reason, details } } (vd. reason = VOUCHER_USED, details = { usedAt, storeName })
++  static String? _reasonOf(Object? decoded) {
++    final error = decoded is Map ? decoded['error'] : null;
++    final reason = error is Map ? error['reason'] : null;
++    return reason is String && reason.isNotEmpty ? reason : null;
++  }
++
++  static Map<String, dynamic>? _detailsOf(Object? decoded) {
++    final error = decoded is Map ? decoded['error'] : null;
++    final details = error is Map ? error['details'] : null;
++    return details is Map ? Map<String, dynamic>.from(details) : null;
++  }
+ }
+diff --git a/lib/services/portal_services.dart b/lib/services/portal_services.dart
+index 6fa6760..e41ecb3 100644
+--- a/lib/services/portal_services.dart
++++ b/lib/services/portal_services.dart
+@@ -127,20 +127,25 @@ class RedeemService {
+   Future<List<Store>> myStores() async =>
+       asList(await _api.get('/redeem/my-stores'), Store.fromJson);
+ 
++  // FR-AUTH-12: may chu gan chi nhanh vao phien; chua chon thi POST /redeem bi tu choi (STORE_NOT_SELECTED)
+   Future<void> selectStore(String storeId) =>
+       _api.post('/auth/select-store', body: {'storeId': storeId});
+ 
++  // FR-REDEEM-05/06: gui DUNG MOT trong hai - nguyen chuoi QR (may chu kiem chu ky) hoac OTP 6 so
+   Future<RedeemResult> redeem({
+     required String storeId,
+-    String? nonce,
++    String? qrPayload,
+     String? otpCode,
+     int? billAmount,
+   }) async {
++    if ((qrPayload == null) == (otpCode == null)) {
++      throw ArgumentError('Cần gửi đúng một trong hai: qrPayload hoặc otpCode.');
++    }
+     final json = await _api.post(
+       '/redeem',
+       body: {
+         'storeId': storeId,
+-        'nonce': ?nonce,
++        'qrPayload': ?qrPayload,
+         'otpCode': ?otpCode,
+         'billAmount': ?billAmount,
+       },
+@@ -150,6 +155,13 @@ class RedeemService {
+ 
+   Future<List<RedemptionLog>> historyToday() async =>
+       asList(await _api.get('/redeem/history/today'), RedemptionLog.fromJson);
++
++  // FR-REDEEM-08: sua gia tri hoa don trong 10 phut sau khi xac nhan, tra ve dong lich su da cap nhat
++  Future<RedemptionLog> updateBill(String logId, int billAmount) async =>
++      RedemptionLog.fromJson(
++        await _api.patch('/redeem/logs/$logId/bill', body: {'billAmount': billAmount})
++            as Map<String, dynamic>,
++      );
+ }
+ 
+ // Chuc nang quan tri - UC-04, UC-05, FR-REPORT-03/04, FR-SETTLE-01/07, FR-REFUND-06
+@@ -210,12 +222,61 @@ class AdminService {
+     body: {'bankTxnRef': bankTxnRef},
+   );
+ 
++  // UC-07: hang doi hoan tien thu cong (cong thanh toan khong hoan tu dong duoc)
+   Future<List<RefundRequest>> manualPendingRefunds() async =>
+       asList(await _api.get('/refunds/manual-pending'), RefundRequest.fromJson);
+ 
++  // Da hoan tay: bat buoc ma giao dich hoan; may chu chan tong tien hoan vuot giao dich da nhan (DC-12)
+   Future<void> confirmManualRefund(String id, String gatewayRefundId) =>
+       _api.patch(
+         '/refunds/$id/confirm-manual',
+         body: {'gatewayRefundId': gatewayRefundId.trim()},
+       );
++
++  // Khong hoan duoc: yeu cau chuyen FAILED, voucher duoc khoi phuc cho khach
++  Future<void> failManualRefund(String id, String reason) =>
++      _api.patch('/refunds/$id/fail-manual', body: {'reason': reason.trim()});
++
++  // UC-07: don thanh toan lech so tien, cho quan tri vien hoan lai thu cong
++  Future<List<PaymentMismatchOrder>> paymentMismatches() async => asList(
++    await _api.get('/admin/payment-mismatches'),
++    PaymentMismatchOrder.fromJson,
++  );
++
++  Future<void> confirmMismatchRefund(String orderId, String gatewayRefundId) =>
++      _api.patch(
++        '/admin/payment-mismatches/$orderId/confirm-refund',
++        body: {'gatewayRefundId': gatewayRefundId.trim()},
++      );
++
++  // FR-ENGAGE-05: danh sach danh gia de kiem duyet, loc theo trang thai / thuong hieu, co phan trang
++  Future<PageResult<Review>> reviews({
++    String? status,
++    String? brandId,
++    int page = 1,
++    int pageSize = 20,
++  }) async => PageResult.fromJson(
++    await _api.get(
++      '/admin/reviews',
++      query: {
++        'status': status,
++        'brandId': brandId,
++        'page': page,
++        'pageSize': pageSize,
++      },
++    ),
++    Review.fromJson,
++  );
++
++  // An danh gia vi pham: bat buoc ly do (ghi AuditLog); tra ve danh gia + diem trung binh moi cua chien dich
++  Future<ReviewModeration> hideReview(String id, String reason) async =>
++      ReviewModeration.fromJson(
++        await _api.patch('/admin/reviews/$id/hide', body: {'reason': reason.trim()})
++            as Map<String, dynamic>,
++      );
++
++  Future<ReviewModeration> unhideReview(String id) async =>
++      ReviewModeration.fromJson(
++        await _api.patch('/admin/reviews/$id/unhide') as Map<String, dynamic>,
++      );
+ }
+diff --git a/lib/utils/format.dart b/lib/utils/format.dart
+index ca21be9..49e2672 100644
+--- a/lib/utils/format.dart
++++ b/lib/utils/format.dart
+@@ -14,6 +14,15 @@ final _date = DateFormat('dd/MM/yyyy');
+ 
+ String formatDate(DateTime value) => _date.format(value.toUtc().add(const Duration(hours: 7)));
+ 
++final _time = DateFormat('HH:mm');
++final _timeDate = DateFormat('HH:mm dd/MM/yyyy');
++
++// Gio:phut theo gio Viet Nam, vd. thoi diem mo khoa o nhap OTP (FR-REDEEM-12)
++String formatTime(DateTime value) => _time.format(value.toUtc().add(const Duration(hours: 7)));
++
++// "HH:mm dd/MM/yyyy" gio Viet Nam, vd. "Da dung luc 10:00 12/10/2026" (FR-REDEEM-07)
++String formatTimeDate(DateTime value) => _timeDate.format(value.toUtc().add(const Duration(hours: 7)));
++
+ // Phan tram -> chuoi gon: 10 -> "10", 7.5 -> "7.5", 99.99 -> "99.99".
+ // Giu toi da 2 chu so thap phan de ty le hoa hong 99.99% khong bi lam tron thanh "100".
+ String formatPercentValue(double percent) {
+diff --git a/lib/widgets/common.dart b/lib/widgets/common.dart
+index 6c2c237..ecda465 100644
+--- a/lib/widgets/common.dart
++++ b/lib/widgets/common.dart
+@@ -161,15 +161,19 @@ class StatusChip extends StatelessWidget {
+     'MANUAL_PENDING': 'Chờ hoàn thủ công',
+     'ACTIVE': 'Đang hoạt động',
+     'INACTIVE': 'Đã vô hiệu hóa',
++    'PAYMENT_MISMATCH': 'Lệch số tiền',
++    'VISIBLE': 'Đang hiển thị',
++    'HIDDEN': 'Đã ẩn',
+   };
+ 
+   static Color colorOf(String status) => switch (status) {
+-    'APPROVED' || 'PUBLISHED' || 'PAID' || 'ACTIVE' => AppColors.success,
+-    'PENDING' || 'MANUAL_PENDING' => AppColors.secondary,
++    'APPROVED' || 'PUBLISHED' || 'PAID' || 'ACTIVE' || 'VISIBLE' => AppColors.success,
++    'PENDING' || 'MANUAL_PENDING' || 'PAYMENT_MISMATCH' => AppColors.secondary,
+     'REJECTED' ||
+     'ENDED' ||
+     'INACTIVE' ||
+     'SUSPENDED' ||
++    'HIDDEN' ||
+     'SOLD_OUT' => AppColors.danger,
+     _ => AppColors.textSecondary,
+   };
+@@ -292,25 +296,52 @@ Future<bool> confirmDialog(
+   return result ?? false;
+ }
+ 
+-// Hop thoai nhap mot dong chu bat buoc (ly do tu choi, ma giao dich, phan hoi danh gia...)
++// Hop thoai nhap mot dong chu bat buoc (ly do tu choi, ma giao dich, phan hoi danh gia...).
++// message: giai thich phia tren o nhap; validator: thay kiem tra mac dinh "khong duoc de trong" (vd. so tien hoa don).
+ Future<String?> promptTextDialog(
+   BuildContext context, {
+   required String title,
+   required String label,
+   String confirm = 'Xác nhận',
+   int maxLines = 1,
++  String? message,
++  String? initialValue,
++  TextInputType? keyboardType,
++  FormFieldValidator<String>? validator,
+ }) => showDialog<String>(
+   context: context,
+-  builder: (_) => _PromptDialog(title, label, confirm, maxLines),
++  builder: (_) => _PromptDialog(
++    title,
++    label,
++    confirm,
++    maxLines,
++    message: message,
++    initialValue: initialValue,
++    keyboardType: keyboardType,
++    validator: validator,
++  ),
+ );
+ 
+ class _PromptDialog extends StatefulWidget {
+-  const _PromptDialog(this.title, this.label, this.confirm, this.maxLines);
++  const _PromptDialog(
++    this.title,
++    this.label,
++    this.confirm,
++    this.maxLines, {
++    this.message,
++    this.initialValue,
++    this.keyboardType,
++    this.validator,
++  });
+ 
+   final String title;
+   final String label;
+   final String confirm;
+   final int maxLines;
++  final String? message;
++  final String? initialValue;
++  final TextInputType? keyboardType;
++  final FormFieldValidator<String>? validator;
+ 
+   @override
+   State<_PromptDialog> createState() => _PromptDialogState();
+@@ -318,7 +349,7 @@ class _PromptDialog extends StatefulWidget {
+ 
+ class _PromptDialogState extends State<_PromptDialog> {
+   final _formKey = GlobalKey<FormState>();
+-  final _controller = TextEditingController();
++  late final _controller = TextEditingController(text: widget.initialValue);
+ 
+   @override
+   void dispose() {
+@@ -339,14 +370,26 @@ class _PromptDialogState extends State<_PromptDialog> {
+       width: 420,
+       child: Form(
+         key: _formKey,
+-        child: TextFormField(
+-          controller: _controller,
+-          autofocus: true,
+-          maxLines: widget.maxLines,
+-          decoration: InputDecoration(labelText: widget.label),
+-          validator: (v) => (v == null || v.trim().isEmpty)
+-              ? 'Vui lòng nhập ${widget.label.toLowerCase()}'
+-              : null,
++        child: Column(
++          mainAxisSize: MainAxisSize.min,
++          crossAxisAlignment: CrossAxisAlignment.stretch,
++          children: [
++            if (widget.message != null) ...[
++              Text(widget.message!),
++              const SizedBox(height: AppSpacing.md),
++            ],
++            TextFormField(
++              controller: _controller,
++              autofocus: true,
++              maxLines: widget.maxLines,
++              keyboardType: widget.keyboardType,
++              decoration: InputDecoration(labelText: widget.label),
++              validator: widget.validator ??
++                  (v) => (v == null || v.trim().isEmpty)
++                      ? 'Vui lòng nhập ${widget.label.toLowerCase()}'
++                      : null,
++            ),
++          ],
+         ),
+       ),
+     ),
+diff --git a/lib/widgets/portal_shell.dart b/lib/widgets/portal_shell.dart
+index b9ef578..297b4f1 100644
+--- a/lib/widgets/portal_shell.dart
++++ b/lib/widgets/portal_shell.dart
+@@ -55,6 +55,7 @@ const _adminNav = [
+   PortalNavItem(AppRoutes.adminSettlements, 'Đối soát', Icons.account_balance_outlined),
+   PortalNavItem(AppRoutes.adminCommission, 'Tỷ lệ hoa hồng', Icons.percent),
+   PortalNavItem(AppRoutes.adminRefunds, 'Hoàn tiền thủ công', Icons.currency_exchange),
++  PortalNavItem(AppRoutes.adminReviews, 'Đánh giá', Icons.rate_review_outlined),
+ ];
+ 
+ // Khung chung cua moi man sau dang nhap: thanh tren (ten khu vuc, tai khoan, dang xuat) + menu.
+diff --git a/test/helpers/fake_backend.dart b/test/helpers/fake_backend.dart
+index 29ee613..eff9ea3 100644
+--- a/test/helpers/fake_backend.dart
++++ b/test/helpers/fake_backend.dart
+@@ -31,6 +31,29 @@ class FakeBackend {
+     headers: {'content-type': 'application/json; charset=utf-8'},
+   );
+ 
++  // Loi nghiep vu theo dinh dang F01 cua BE (BusinessException): error co them reason + details
++  static http.Response businessError(
++    int status,
++    String reason,
++    String message, {
++    Map<String, Object?>? details,
++  }) => http.Response(
++    jsonEncode({
++      'data': null,
++      'error': {
++        'code': status,
++        'message': message,
++        'reason': reason,
++        'details': details,
++        'path': '/api/test',
++        'timestamp': '2026-10-21T00:00:00.000Z',
++      },
++      'meta': null,
++    }),
++    status,
++    headers: {'content-type': 'application/json; charset=utf-8'},
++  );
++
+   late final client = MockClient((request) async {
+     requests.add(request);
+     final path = request.url.path.replaceFirst('/api', '');
+diff --git a/test/unit/api_client_test.dart b/test/unit/api_client_test.dart
+index b728080..9a2e8c8 100644
+--- a/test/unit/api_client_test.dart
++++ b/test/unit/api_client_test.dart
+@@ -51,6 +51,98 @@ void main() {
+     );
+   });
+ 
++  test('loi nghiep vu: doc error.reason va error.details (FR-REDEEM-07)', () async {
++    final api = clientReturning(400, {
++      'data': null,
++      'error': {
++        'code': 400,
++        'message': 'Voucher đã được sử dụng lúc 10:00 12/10/2026 tại Q1.',
++        'reason': 'VOUCHER_USED',
++        'details': {'usedAt': '2026-10-12T03:00:00.000Z', 'storeId': 's1', 'storeName': 'Q1'},
++        'path': '/api/redeem',
++        'timestamp': 'x',
++      },
++      'meta': null,
++    });
++    await expectLater(
++      api.post('/redeem', body: {}),
++      throwsA(isA<ApiException>()
++          .having((e) => e.message, 'message', 'Voucher đã được sử dụng lúc 10:00 12/10/2026 tại Q1.')
++          .having((e) => e.statusCode, 'statusCode', 400)
++          .having((e) => e.reason, 'reason', 'VOUCHER_USED')
++          .having((e) => e.details, 'details', {'usedAt': '2026-10-12T03:00:00.000Z', 'storeId': 's1', 'storeName': 'Q1'})),
++    );
++  });
++
++  test('loi nghiep vu co details la danh sach long nhau (WRONG_STORE) va status 429 (OTP_LOCKED)', () async {
++    final wrongStore = clientReturning(400, {
++      'data': null,
++      'error': {
++        'code': 400,
++        'message': 'Voucher không áp dụng tại chi nhánh này.',
++        'reason': 'WRONG_STORE',
++        'details': {
++          'stores': [
++            {'id': 's2', 'name': 'Q3', 'address': '2 Võ Văn Tần'},
++          ],
++        },
++      },
++      'meta': null,
++    });
++    await expectLater(
++      wrongStore.post('/redeem', body: {}),
++      throwsA(isA<ApiException>().having((e) => (e.details!['stores'] as List).first['name'], 'store', 'Q3')),
++    );
++
++    final locked = clientReturning(429, {
++      'data': null,
++      'error': {'code': 429, 'message': 'Khóa OTP.', 'reason': 'OTP_LOCKED', 'details': {'lockedUntil': '2026-10-21T03:15:00.000Z'}},
++      'meta': null,
++    });
++    await expectLater(
++      locked.post('/redeem', body: {}),
++      throwsA(isA<ApiException>()
++          .having((e) => e.statusCode, 'statusCode', 429)
++          .having((e) => e.reason, 'reason', 'OTP_LOCKED')
++          .having((e) => e.details?['lockedUntil'], 'lockedUntil', '2026-10-21T03:15:00.000Z')),
++    );
++  });
++
++  test('loi khong co reason / details (loi thuong, dinh dang cu) thi ca hai la null', () async {
++    final plain = clientReturning(404, {
++      'data': null,
++      'error': {'code': 404, 'message': 'Không tìm thấy.', 'path': '/api/x', 'timestamp': 'x'},
++      'meta': null,
++    });
++    await expectLater(
++      plain.get('/x'),
++      throwsA(isA<ApiException>()
++          .having((e) => e.reason, 'reason', isNull)
++          .having((e) => e.details, 'details', isNull)),
++    );
++
++    final legacy = clientReturning(400, {'statusCode': 400, 'message': 'Sai.', 'reason': 'IGNORED'});
++    await expectLater(
++      legacy.get('/x'),
++      throwsA(isA<ApiException>()
++          .having((e) => e.message, 'message', 'Sai.')
++          .having((e) => e.reason, 'reason', isNull)
++          .having((e) => e.details, 'details', isNull)),
++    );
++
++    final nullDetails = clientReturning(400, {
++      'data': null,
++      'error': {'code': 400, 'message': 'Mã này đã được dùng.', 'reason': 'TOKEN_USED', 'details': null},
++      'meta': null,
++    });
++    await expectLater(
++      nullDetails.post('/redeem', body: {}),
++      throwsA(isA<ApiException>()
++          .having((e) => e.reason, 'reason', 'TOKEN_USED')
++          .having((e) => e.details, 'details', isNull)),
++    );
++  });
++
+   test('loi dinh dang cu: message dang mang thi noi bang xuong dong', () async {
+     final api = clientReturning(400, {
+       'statusCode': 400,
+diff --git a/test/unit/models_and_utils_test.dart b/test/unit/models_and_utils_test.dart
+index b206c1c..fb54b8e 100644
+--- a/test/unit/models_and_utils_test.dart
++++ b/test/unit/models_and_utils_test.dart
+@@ -1,32 +1,165 @@
+ import 'package:flutter_test/flutter_test.dart';
++import 'package:voucher_platform_web/models/brand.dart';
+ import 'package:voucher_platform_web/models/campaign.dart';
+ import 'package:voucher_platform_web/models/finance.dart';
++import 'package:voucher_platform_web/models/json_utils.dart';
+ import 'package:voucher_platform_web/models/redeem.dart';
+ import 'package:voucher_platform_web/utils/format.dart';
+ import 'package:voucher_platform_web/utils/validators.dart';
+ 
+ void main() {
+-  group('QrPayload (FR-REDEEM-02/05)', () {
+-    test('tach dung 4 phan voucherItemId.nonce.expiresAt.signature', () {
+-      final p = QrPayload.tryParse('item-1.abc123.1700000000000.sig')!;
+-      expect(p.voucherItemId, 'item-1');
+-      expect(p.nonce, 'abc123');
++  group('QrPayload v1 (FR-REDEEM-02/05, NFR-SEC-02)', () {
++    const nonce = '0123456789abcdef0123456789abcdef';
++    const sig = 'Zk3_-aBcD0123456789xyzXYZ_abcdefghijklmnopq';
++
++    test('tach dung v1.<nonce 32 hex>.<expiresAtMs>.<chu ky base64url>, giu nguyen chuoi de gui len', () {
++      final p = QrPayload.tryParse(' v1.$nonce.1700000000000.$sig\n')!;
++      expect(p.nonce, nonce);
+       expect(p.expiresAt, DateTime.fromMillisecondsSinceEpoch(1700000000000, isUtc: true));
++      expect(p.raw, 'v1.$nonce.1700000000000.$sig', reason: 'gui nguyen chuoi (da bo khoang trang) de may chu kiem chu ky');
++    });
++
++    test('tu choi dinh dang cu voucherItemId.nonce.exp.sig', () {
++      expect(QrPayload.tryParse('item-1.abc123.1700000000000.sig'), isNull);
++      expect(QrPayload.tryParse('3f2b8c1e-1111-2222-3333-444455556666.$nonce.1700000000000.$sig'), isNull);
+     });
+ 
+-    test('chuoi sai dinh dang tra ve null', () {
++    test('tu choi sai phien ban', () {
++      expect(QrPayload.tryParse('v2.$nonce.1700000000000.$sig'), isNull);
++      expect(QrPayload.tryParse('V1.$nonce.1700000000000.$sig'), isNull);
++    });
++
++    test('tu choi thieu / thua phan hoac phan sai dang', () {
+       expect(QrPayload.tryParse('khong-phai-qr'), isNull);
+-      expect(QrPayload.tryParse('a.b.khongphaiso.d'), isNull);
+-      expect(QrPayload.tryParse('a..123.d'), isNull);
++      expect(QrPayload.tryParse('v1.$nonce.1700000000000'), isNull, reason: 'thieu chu ky');
++      expect(QrPayload.tryParse('v1.$nonce.1700000000000.$sig.extra'), isNull, reason: 'thua phan');
++      expect(QrPayload.tryParse('v1.abc123.1700000000000.$sig'), isNull, reason: 'nonce khong du 32 hex');
++      expect(QrPayload.tryParse('v1.${nonce.toUpperCase()}.1700000000000.$sig'), isNull, reason: 'nonce phai la hex thuong');
++      expect(QrPayload.tryParse('v1.$nonce.khongphaiso.$sig'), isNull);
++      expect(QrPayload.tryParse('v1.$nonce.-5.$sig'), isNull);
++      expect(QrPayload.tryParse('v1.$nonce.1700000000000.chu+ky/sai='), isNull, reason: 'chu ky phai la base64url');
++      expect(QrPayload.tryParse('v1..1700000000000.$sig'), isNull);
+     });
+ 
+     test('het han khi now >= expiresAt', () {
+-      final p = QrPayload.tryParse('i.n.1000.s')!;
++      final p = QrPayload.tryParse('v1.$nonce.1000.$sig')!;
+       expect(p.isExpired(DateTime.fromMillisecondsSinceEpoch(999, isUtc: true)), isFalse);
+       expect(p.isExpired(DateTime.fromMillisecondsSinceEpoch(1000, isUtc: true)), isTrue);
+     });
+   });
+ 
++  group('Model F11 / F12 / F15 doc JSON moi', () {
++    test('RedeemResult doc campaign, ma voucher, phuong thuc, hoa don', () {
++      final r = RedeemResult.fromJson({
++        'message': 'Xác nhận sử dụng thành công.',
++        'redemptionLogId': 'l1',
++        'voucherItemId': 'v1',
++        'voucherCode': 'HL-ABC123',
++        'redeemedAt': '2026-10-12T03:00:00.000Z',
++        'method': 'QR',
++        'billAmount': null,
++        'billEditableUntil': '2026-10-12T03:10:00.000Z',
++        'campaign': {'id': 'c1', 'title': 'Giảm 50k', 'voucherType': 'PREPAID', 'faceValue': '100000'},
++      });
++      expect(r.voucherCode, 'HL-ABC123');
++      expect(r.method, 'QR');
++      expect(r.billAmount, isNull);
++      expect(r.campaign?.title, 'Giảm 50k');
++      expect(r.campaign?.faceValue, 100000);
++      expect(r.billEditableUntil, DateTime.utc(2026, 10, 12, 3, 10));
++    });
++
++    test('RedemptionLog doc lich su moi, billEditable mac dinh false', () {
++      final log = RedemptionLog.fromJson({
++        'id': 'l1',
++        'voucherItemId': 'v1',
++        'voucherCode': 'HL-1',
++        'campaignTitle': 'Giảm 50k',
++        'storeId': 's1',
++        'storeName': 'Q1',
++        'method': 'OTP',
++        'billAmount': '90000',
++        'redeemedAt': '2026-10-12T02:30:00Z',
++        'billEditable': true,
++      });
++      expect(log.campaignTitle, 'Giảm 50k');
++      expect(log.storeName, 'Q1');
++      expect(log.billAmount, 90000);
++      expect(log.billEditable, isTrue);
++      expect(RedemptionLog.fromJson({'id': 'l2', 'redeemedAt': '2026-10-12T02:30:00Z'}).billEditable, isFalse);
++    });
++
++    test('RefundRequest doc khach hang, giao dich goc; PaymentMismatchOrder cong so tien da nhan', () {
++      final r = RefundRequest.fromJson({
++        'id': 'r1',
++        'voucherItemId': 'v1',
++        'status': 'MANUAL_PENDING',
++        'createdAt': '2026-10-20T00:00:00Z',
++        'amount': '50000',
++        'customer': {'id': 'u1', 'email': 'a@test.vn', 'fullName': 'Nguyễn An', 'phone': null},
++        'payment': {'id': 'p1', 'gateway': 'VNPAY', 'gatewayTxnId': 'TXN1', 'amount': '50000'},
++      });
++      expect(r.amount, 50000);
++      expect(r.customer?.summary, 'Nguyễn An · a@test.vn');
++      expect(r.payment?.gatewayTxnId, 'TXN1');
++      expect(RefundRequest.fromJson({'id': 'r2', 'createdAt': 'x', 'customer': null, 'payment': null}).payment, isNull);
++
++      final o = PaymentMismatchOrder.fromJson({
++        'id': 'o1',
++        'totalAmount': '100000',
++        'refundedAmount': '0',
++        'createdAt': '2026-10-20T00:00:00Z',
++        'status': 'PAYMENT_MISMATCH',
++        'payments': [
++          {'id': 'p1', 'gatewayTxnId': 'T1', 'amount': 80000},
++          {'id': 'p2', 'gatewayTxnId': 'T2', 'amount': '40000'},
++        ],
++      });
++      expect(o.receivedAmount, 120000);
++    });
++
++    test('Review doc truong moi, thieu truong thi mac dinh an toan', () {
++      final r = Review.fromJson({
++        'id': 'rv1',
++        'rating': 4,
++        'createdAt': '2026-10-20T00:00:00Z',
++        'campaignTitle': 'Giảm 50k',
++        'reviewerName': 'An N.',
++        'status': 'HIDDEN',
++      });
++      expect(r.isHidden, isTrue);
++      expect(r.reviewerName, 'An N.');
++      expect(r.withStatus('VISIBLE').isHidden, isFalse);
++      expect(r.withStatus('VISIBLE').campaignTitle, 'Giảm 50k');
++      final old = Review.fromJson({'id': 'rv2', 'rating': '5', 'createdAt': '2026-10-20T00:00:00Z'});
++      expect(old.isHidden, isFalse);
++      expect(old.campaignTitle, isNull);
++    });
++
++    test('PageResult doc trang { items, total, page, pageSize } va mang cu', () {
++      final page = PageResult.fromJson({
++        'items': [
++          {'id': 'rv1', 'rating': 5, 'createdAt': '2026-10-20T00:00:00Z'},
++        ],
++        'total': 21,
++        'page': 1,
++        'pageSize': 20,
++      }, Review.fromJson);
++      expect(page.items, hasLength(1));
++      expect(page.hasMore, isTrue);
++      final legacy = PageResult.fromJson([
++        {'id': 'rv1', 'rating': 5, 'createdAt': '2026-10-20T00:00:00Z'},
++      ], Review.fromJson);
++      expect(legacy.total, 1);
++      expect(legacy.hasMore, isFalse);
++    });
++
++    test('formatTimeDate / formatTime theo gio Viet Nam', () {
++      expect(formatTimeDate(DateTime.utc(2026, 10, 12, 3)), '10:00 12/10/2026');
++      expect(formatTime(DateTime.utc(2026, 10, 12, 17, 5)), '00:05');
++    });
++  });
++
+   group('Model doc JSON tu PostgreSQL (numeric/bigint la chuoi)', () {
+     test('VoucherCampaign doc gia dang chuoi va tinh ton kho con lai', () {
+       final c = VoucherCampaign.fromJson({
+diff --git a/test/unit/providers_test.dart b/test/unit/providers_test.dart
+index ca051b3..7bdb0c2 100644
+--- a/test/unit/providers_test.dart
++++ b/test/unit/providers_test.dart
+@@ -1,6 +1,7 @@
+ import 'dart:async';
+ 
+ import 'package:flutter_test/flutter_test.dart';
++import 'package:voucher_platform_web/models/redeem.dart';
+ import 'package:voucher_platform_web/providers/auth_provider.dart';
+ import 'package:voucher_platform_web/providers/brand_provider.dart';
+ import 'package:voucher_platform_web/providers/store_session_provider.dart';
+@@ -10,6 +11,10 @@ import 'package:voucher_platform_web/services/portal_services.dart';
+ 
+ import '../helpers/fake_backend.dart';
+ 
++// Chuoi QR dinh dang v1 con han (chu ky do may chu kiem, client chi kiem dinh dang)
++String validQr({DateTime? expiresAt}) =>
++    'v1.0123456789abcdef0123456789abcdef.${(expiresAt ?? DateTime.now().add(const Duration(minutes: 1))).millisecondsSinceEpoch}.c2lnbmF0dXJl_-';
++
+ Map<String, dynamic> store(String id, {bool active = true}) => {
+   'id': id,
+   'brandId': 'b1',
+@@ -220,7 +225,7 @@ void main() {
+       expect(backend.bodyOf('POST', '/auth/select-store'), {'storeId': 's1'});
+     });
+ 
+-    test('redeem gui storeId cua chi nhanh dang lam va nonce; thanh cong thi tai lai lich su', () async {
++    test('redeem gui storeId cua chi nhanh dang lam va NGUYEN chuoi QR (qrPayload, khong con nonce); thanh cong thi tai lai lich su', () async {
+       backend.on('GET', '/redeem/my-stores', (_) => [store('s1'), store('s2')]);
+       backend.on(
+         'POST',
+@@ -249,17 +254,112 @@ void main() {
+       );
+       await session.selectStore(session.stores[1]);
+ 
+-      final ok = await session.redeem(nonce: 'n-1', billAmount: 120000);
++      final qr = validQr();
++      final ok = await session.redeemQr(' $qr ', billAmount: 120000);
+       expect(ok, isTrue);
+       expect(backend.bodyOf('POST', '/redeem'), {
+         'storeId': 's2',
+-        'nonce': 'n-1',
++        'qrPayload': qr,
+         'billAmount': 120000,
+       });
+       expect(session.lastResult?.voucherItemId, 'v1');
+       expect(session.history, hasLength(1));
+     });
+ 
++    test('chuoi QR sai dinh dang hoac da het han thi bao loi ngay, khong goi API', () async {
++      backend.on('GET', '/redeem/my-stores', (_) => [store('s1')]);
++      final session = StoreSessionProvider(RedeemService(api));
++      await session.loadStores();
++
++      expect(await session.redeemQr('item-1.abc.1700000000000.sig'), isFalse);
++      expect(session.lastFailure?.reason, RedeemReason.tokenInvalid);
++
++      final expired = validQr(expiresAt: DateTime.now().subtract(const Duration(seconds: 1)));
++      expect(await session.redeemQr(expired), isFalse);
++      expect(session.lastFailure?.reason, RedeemReason.tokenExpired);
++      expect(backend.called('POST', '/redeem'), isFalse);
++    });
++
++    test('BILL_REQUIRED: chua phai ket qua cuoi, giu ma de gui lai kem hoa don (BR-03)', () async {
++      backend.on('GET', '/redeem/my-stores', (_) => [store('s1')]);
++      var calls = 0;
++      backend.on('POST', '/redeem', (_) {
++        calls++;
++        return calls == 1
++            ? FakeBackend.businessError(
++                400,
++                'BILL_REQUIRED',
++                'Voucher mệnh giá bắt buộc nhập giá trị hóa đơn (BR-03).',
++                details: {'voucherType': 'PREPAID', 'faceValue': 100000},
++              )
++            : {'message': 'ok', 'voucherItemId': 'v1'};
++      });
++      backend.on('GET', '/redeem/history/today', (_) => []);
++      final session = StoreSessionProvider(RedeemService(api));
++      await session.loadStores();
++      final qr = validQr();
++
++      expect(await session.redeemQr(qr), isFalse);
++      expect(session.lastFailure, isNull, reason: 'khong hien khung do');
++      expect(session.billRequirement?.qrPayload, qr);
++      expect(session.billRequirement?.faceValue, 100000);
++
++      expect(await session.resubmitWithBill(150000), isTrue);
++      expect(backend.bodyOf('POST', '/redeem'), {'storeId': 's1', 'qrPayload': qr, 'billAmount': 150000});
++      expect(session.billRequirement, isNull);
++      expect(session.lastResult?.voucherItemId, 'v1');
++    });
++
++    test('OTP_LOCKED: khoa o nhap OTP den lockedUntil, khong gui OTP nua nhung van gui QR (FR-REDEEM-12)', () async {
++      backend.on('GET', '/redeem/my-stores', (_) => [store('s1')]);
++      final lockedUntil = DateTime.now().toUtc().add(const Duration(minutes: 15));
++      backend.on(
++        'POST',
++        '/redeem',
++        (_) => FakeBackend.businessError(
++          429,
++          'OTP_LOCKED',
++          'Nhập sai OTP quá nhiều lần.',
++          details: {'lockedUntil': lockedUntil.toIso8601String()},
++        ),
++      );
++      final session = StoreSessionProvider(RedeemService(api));
++      await session.loadStores();
++
++      expect(await session.redeem(otpCode: '111111'), isFalse);
++      expect(session.isOtpLocked(DateTime.now()), isTrue);
++      expect(session.otpLockedUntil, lockedUntil);
++      expect(session.lastFailure, isNull);
++
++      final before = backend.requests.length;
++      expect(await session.redeem(otpCode: '222222'), isFalse);
++      expect(backend.requests.length, before, reason: 'dang khoa thi khong goi may chu');
++
++      await session.redeemQr(validQr());
++      expect(backend.bodyOf('POST', '/redeem').containsKey('qrPayload'), isTrue);
++      expect(session.isOtpLocked(lockedUntil.add(const Duration(seconds: 1))), isFalse);
++    });
++
++    test('sua hoa don: PATCH dung URL / body va thay dong lich su (FR-REDEEM-08)', () async {
++      backend.on('GET', '/redeem/my-stores', (_) => [store('s1')]);
++      backend.on('GET', '/redeem/history/today', (_) => [
++            {'id': 'l1', 'storeId': 's1', 'method': 'QR', 'redeemedAt': '2026-10-12T03:00:00Z', 'billEditable': true},
++          ]);
++      backend.on('PATCH', '/redeem/logs/l1/bill', (_) => {
++            'id': 'l1',
++            'storeId': 's1',
++            'method': 'QR',
++            'redeemedAt': '2026-10-12T03:00:00Z',
++            'billAmount': 99000,
++            'billEditable': true,
++          });
++      final session = StoreSessionProvider(RedeemService(api));
++      await session.loadHistory();
++      await session.updateBill('l1', 99000);
++      expect(backend.bodyOf('PATCH', '/redeem/logs/l1/bill'), {'billAmount': 99000});
++      expect(session.history.single.billAmount, 99000);
++    });
++
+     test(
+       'redeem that bai giu thong diep loi cua may chu (FR-REDEEM-07)',
+       () async {
+diff --git a/test/widget/admin_refund_review_test.dart b/test/widget/admin_refund_review_test.dart
+new file mode 100644
+index 0000000..fa99f60
+--- /dev/null
++++ b/test/widget/admin_refund_review_test.dart
+@@ -0,0 +1,325 @@
++// Widget test hang doi hoan tien (UC-07, F12) va kiem duyet danh gia (FR-ENGAGE-05, F15).
++// Chay bang: flutter test
++import 'package:flutter/material.dart';
++import 'package:flutter_test/flutter_test.dart';
++import 'package:voucher_platform_web/providers/auth_provider.dart';
++import 'package:voucher_platform_web/routes.dart';
++
++import '../helpers/fake_backend.dart';
++
++Map<String, dynamic> manualRefund(String id) => {
++  'id': id,
++  'voucherItemId': 'v-$id',
++  'status': 'MANUAL_PENDING',
++  'statusLabel': 'Chờ hoàn thủ công',
++  'reason': 'Không dùng nữa',
++  'rejectReason': null,
++  'createdAt': '2026-10-20T03:00:00.000Z',
++  'decidedAt': null,
++  'amount': '50000',
++  'voucherCode': 'HL-$id',
++  'voucherStatus': 'REFUND_PENDING',
++  'campaignId': 'c1',
++  'campaignTitle': 'Giảm 50k Highlands',
++  'paymentRefund': null,
++  'customer': {'id': 'u1', 'email': 'an@test.vn', 'fullName': 'Nguyễn An', 'phone': '0901234567'},
++  'payment': {'id': 'p1', 'gateway': 'VNPAY', 'gatewayTxnId': 'TXN-777', 'amount': '50000'},
++};
++
++Map<String, dynamic> mismatchOrder(String id) => {
++  'id': id,
++  'userId': 'u1',
++  'campaignId': 'c1',
++  'campaignTitle': 'Combo trưa',
++  'customer': {'id': 'u1', 'email': 'binh@test.vn', 'fullName': 'Trần Bình', 'phone': null},
++  'quantity': 2,
++  'unitPrice': '50000',
++  'totalAmount': '100000',
++  'refundedAmount': '0',
++  'createdAt': '2026-10-19T03:00:00.000Z',
++  'status': 'PAYMENT_MISMATCH',
++  'payments': [
++    {'id': 'p9', 'gatewayTxnId': 'TXN-999', 'amount': 120000},
++  ],
++};
++
++Map<String, dynamic> review(String id, {String status = 'VISIBLE', int rating = 4}) => {
++  'id': id,
++  'campaignId': 'c1',
++  'campaignTitle': 'Giảm 50k Highlands',
++  'brandId': 'b1',
++  'brandName': 'Highlands',
++  'rating': rating,
++  'comment': 'Bình luận $id',
++  'brandReply': null,
++  'brandRepliedAt': null,
++  'createdAt': '2026-10-20T03:00:00.000Z',
++  'reviewerName': 'Khách $id',
++  'voucherItemId': 'v-$id',
++  'status': status,
++};
++
++void main() {
++  late FakeBackend backend;
++
++  setUp(() {
++    backend = FakeBackend();
++    backend.on('GET', '/admin/dashboard', (_) => {});
++    backend.on('GET', '/refunds/manual-pending', (_) => [manualRefund('r1')]);
++    backend.on('GET', '/admin/payment-mismatches', (_) => [mismatchOrder('o1')]);
++  });
++
++  Future<void> openAdmin(WidgetTester tester, String route) async {
++    useDesktopSize(tester);
++    final (app, _) = await buildTestApp(backend, loggedInAs: Roles.admin);
++    await tester.pumpWidget(app);
++    await tester.pumpAndSettle();
++    await openRoute(tester, route);
++  }
++
++  Finder inDialog(Finder finder) => find.descendant(of: find.byType(AlertDialog), matching: finder);
++
++  int count(String method, String path) =>
++      backend.requests.where((r) => r.method == method && r.url.path == '/api$path').length;
++
++  group('Hang doi hoan tien (UC-07)', () {
++    testWidgets('hien du thong tin: chien dich, ma voucher, so tien, khach, giao dich goc, ly do + ghi chu DC-12', (tester) async {
++      await openAdmin(tester, AppRoutes.adminRefunds);
++
++      expect(find.text('Giảm 50k Highlands'), findsOneWidget);
++      expect(find.textContaining('HL-r1'), findsOneWidget);
++      expect(find.textContaining('50.000'), findsWidgets);
++      expect(find.textContaining('Nguyễn An · an@test.vn · 0901234567'), findsOneWidget);
++      expect(find.textContaining('VNPAY · mã TXN-777'), findsOneWidget);
++      expect(find.textContaining('Không dùng nữa'), findsOneWidget);
++      expect(find.textContaining('DC-12'), findsOneWidget);
++    });
++
++    testWidgets('"Da hoan tien": khong gui duoc khi bo trong ma giao dich, gui gatewayRefundId roi tai lai', (tester) async {
++      backend.on('PATCH', '/refunds/r1/confirm-manual', (_) => {'id': 'r1', 'status': 'COMPLETED'});
++      await openAdmin(tester, AppRoutes.adminRefunds);
++
++      await tester.tap(find.byKey(const Key('refund-confirm-r1')));
++      await tester.pumpAndSettle();
++      expect(find.byType(AlertDialog), findsOneWidget);
++
++      await tester.tap(inDialog(find.widgetWithText(FilledButton, 'Xác nhận')));
++      await tester.pumpAndSettle();
++      expect(find.text('Vui lòng nhập mã giao dịch hoàn tiền'), findsOneWidget);
++      expect(backend.called('PATCH', '/refunds/r1/confirm-manual'), isFalse);
++
++      await tester.enterText(inDialog(find.byType(TextFormField)), '   ');
++      await tester.tap(inDialog(find.widgetWithText(FilledButton, 'Xác nhận')));
++      await tester.pumpAndSettle();
++      expect(backend.called('PATCH', '/refunds/r1/confirm-manual'), isFalse, reason: 'chi co khoang trang');
++
++      await tester.enterText(inDialog(find.byType(TextFormField)), ' RF-001 ');
++      await tester.tap(inDialog(find.widgetWithText(FilledButton, 'Xác nhận')));
++      await tester.pumpAndSettle();
++      expect(backend.bodyOf('PATCH', '/refunds/r1/confirm-manual'), {'gatewayRefundId': 'RF-001'});
++      expect(find.text('Đã xác nhận hoàn tiền.'), findsOneWidget);
++      expect(count('GET', '/refunds/manual-pending'), 2, reason: 'tai lai hang doi sau khi xu ly');
++    });
++
++    testWidgets('"Khong hoan duoc": bat buoc ly do, gui PATCH fail-manual', (tester) async {
++      backend.on('PATCH', '/refunds/r1/fail-manual', (_) => {'id': 'r1', 'status': 'FAILED'});
++      await openAdmin(tester, AppRoutes.adminRefunds);
++
++      await tester.tap(find.byKey(const Key('refund-fail-r1')));
++      await tester.pumpAndSettle();
++      expect(find.textContaining('voucher được khôi phục'), findsOneWidget);
++      await tester.tap(inDialog(find.widgetWithText(FilledButton, 'Xác nhận')));
++      await tester.pumpAndSettle();
++      expect(find.text('Vui lòng nhập lý do không hoàn được'), findsOneWidget);
++      expect(backend.called('PATCH', '/refunds/r1/fail-manual'), isFalse);
++
++      await tester.enterText(inDialog(find.byType(TextFormField)), 'Tài khoản khách đã đóng');
++      await tester.tap(inDialog(find.widgetWithText(FilledButton, 'Xác nhận')));
++      await tester.pumpAndSettle();
++      expect(backend.bodyOf('PATCH', '/refunds/r1/fail-manual'), {'reason': 'Tài khoản khách đã đóng'});
++      expect(find.textContaining('voucher đã được khôi phục cho khách'), findsOneWidget);
++    });
++
++    testWidgets('hien loi cua may chu (DC-12 vuot so tien da nhan)', (tester) async {
++      backend.on(
++        'PATCH',
++        '/refunds/r1/confirm-manual',
++        (_) => FakeBackend.businessError(400, 'REFUND_EXCEEDS_PAYMENT', 'Số tiền hoàn vượt giao dịch đã nhận.'),
++      );
++      await openAdmin(tester, AppRoutes.adminRefunds);
++
++      await tester.tap(find.byKey(const Key('refund-confirm-r1')));
++      await tester.pumpAndSettle();
++      await tester.enterText(inDialog(find.byType(TextFormField)), 'RF-002');
++      await tester.tap(inDialog(find.widgetWithText(FilledButton, 'Xác nhận')));
++      await tester.pumpAndSettle();
++      expect(find.text('Số tiền hoàn vượt giao dịch đã nhận.'), findsOneWidget);
++    });
++
++    testWidgets('tab "Don lech so tien": so tien phai tra va da nhan, xac nhan bat buoc ma giao dich', (tester) async {
++      backend.on('PATCH', '/admin/payment-mismatches/o1/confirm-refund', (_) => {'message': 'ok', 'paymentRefundId': 'pr1'});
++      await openAdmin(tester, AppRoutes.adminRefunds);
++
++      await tester.tap(find.text('Đơn lệch số tiền'));
++      await tester.pumpAndSettle();
++      expect(find.text('Combo trưa'), findsOneWidget);
++      expect(find.textContaining('Trần Bình · binh@test.vn'), findsOneWidget);
++      expect(find.textContaining('100.000'), findsOneWidget, reason: 'so tien phai tra');
++      expect(find.textContaining('120.000'), findsWidgets, reason: 'so tien da nhan');
++      expect(find.textContaining('TXN-999'), findsOneWidget);
++      expect(find.textContaining('Nhận thừa: 20.000'), findsOneWidget);
++
++      await tester.tap(find.byKey(const Key('mismatch-confirm-o1')));
++      await tester.pumpAndSettle();
++      await tester.tap(inDialog(find.widgetWithText(FilledButton, 'Xác nhận')));
++      await tester.pumpAndSettle();
++      expect(find.text('Vui lòng nhập mã giao dịch hoàn tiền'), findsOneWidget);
++      expect(backend.called('PATCH', '/admin/payment-mismatches/o1/confirm-refund'), isFalse);
++
++      await tester.enterText(inDialog(find.byType(TextFormField)), 'RF-MM-1');
++      await tester.tap(inDialog(find.widgetWithText(FilledButton, 'Xác nhận')));
++      await tester.pumpAndSettle();
++      expect(backend.bodyOf('PATCH', '/admin/payment-mismatches/o1/confirm-refund'), {'gatewayRefundId': 'RF-MM-1'});
++      expect(find.textContaining('Đã hủy'), findsOneWidget);
++      expect(count('GET', '/admin/payment-mismatches'), 2);
++    });
++  });
++
++  group('Kiem duyet danh gia (FR-ENGAGE-05)', () {
++    void stubReviews({int total = 2}) {
++      backend.on('GET', '/admin/reviews', (request) {
++        final status = request.url.queryParameters['status'];
++        final page = int.parse(request.url.queryParameters['page'] ?? '1');
++        final all = [review('rv1'), review('rv2', status: 'HIDDEN', rating: 1)];
++        final items = page > 1
++            ? [review('rv3')]
++            : all.where((r) => status == null || r['status'] == status).toList();
++        return {'items': items, 'total': status == null ? total : items.length, 'page': page, 'pageSize': 20};
++      });
++    }
++
++    testWidgets('menu quan tri co muc "Danh gia", liet ke va loc theo trang thai', (tester) async {
++      stubReviews();
++      useDesktopSize(tester);
++      final (app, _) = await buildTestApp(backend, loggedInAs: Roles.admin);
++      await tester.pumpWidget(app);
++      await tester.pumpAndSettle();
++
++      await tester.tap(find.text('Đánh giá'));
++      await tester.pumpAndSettle();
++      expect(find.text('Kiểm duyệt đánh giá'), findsOneWidget);
++      expect(backend.requests.last.url.queryParameters, {'page': '1', 'pageSize': '20'});
++      expect(find.text('Bình luận rv1'), findsOneWidget);
++      expect(find.text('Bình luận rv2'), findsOneWidget);
++      expect(find.textContaining('Giảm 50k Highlands · Highlands'), findsWidgets);
++      expect(find.textContaining('Khách rv1'), findsOneWidget);
++
++      await tester.tap(find.widgetWithText(ChoiceChip, 'Đã ẩn'));
++      await tester.pumpAndSettle();
++      expect(backend.requests.last.url.queryParameters['status'], 'HIDDEN');
++      expect(find.text('Bình luận rv1'), findsNothing);
++      expect(find.text('Bình luận rv2'), findsOneWidget);
++      expect(find.text('Hiện lại'), findsOneWidget);
++    });
++
++    testWidgets('"An" bat buoc ly do, goi PATCH hide va bao diem trung binh moi', (tester) async {
++      stubReviews();
++      backend.on('PATCH', '/admin/reviews/rv1/hide', (_) => {...review('rv1', status: 'HIDDEN'), 'avgRating': 4.5, 'reviewCount': 3});
++      await openAdmin(tester, AppRoutes.adminReviews);
++
++      await tester.tap(find.byKey(const Key('review-hide-rv1')));
++      await tester.pumpAndSettle();
++      await tester.tap(inDialog(find.widgetWithText(FilledButton, 'Ẩn')));
++      await tester.pumpAndSettle();
++      expect(find.text('Vui lòng nhập lý do ẩn'), findsOneWidget);
++      expect(backend.called('PATCH', '/admin/reviews/rv1/hide'), isFalse);
++
++      await tester.enterText(inDialog(find.byType(TextFormField)), 'Ngôn từ xúc phạm');
++      await tester.tap(inDialog(find.widgetWithText(FilledButton, 'Ẩn')));
++      await tester.pumpAndSettle();
++      expect(backend.bodyOf('PATCH', '/admin/reviews/rv1/hide'), {'reason': 'Ngôn từ xúc phạm'});
++      expect(find.textContaining('Điểm trung bình chiến dịch: 4.5'), findsOneWidget);
++      expect(find.byKey(const Key('review-unhide-rv1')), findsOneWidget, reason: 'cap nhat tai cho');
++    });
++
++    testWidgets('"Hien lai" goi PATCH unhide', (tester) async {
++      stubReviews();
++      backend.on('PATCH', '/admin/reviews/rv2/unhide', (_) => {...review('rv2'), 'avgRating': 2.5, 'reviewCount': 2});
++      await openAdmin(tester, AppRoutes.adminReviews);
++
++      await tester.tap(find.byKey(const Key('review-unhide-rv2')));
++      await tester.pumpAndSettle();
++      await tester.tap(inDialog(find.widgetWithText(FilledButton, 'Hiện lại')));
++      await tester.pumpAndSettle();
++      expect(backend.called('PATCH', '/admin/reviews/rv2/unhide'), isTrue);
++      expect(find.textContaining('Điểm trung bình chiến dịch: 2.5'), findsOneWidget);
++      expect(find.byKey(const Key('review-hide-rv2')), findsOneWidget);
++    });
++
++    testWidgets('con trang sau thi co nut "Tai them"', (tester) async {
++      stubReviews(total: 3);
++      await openAdmin(tester, AppRoutes.adminReviews);
++
++      await tapVisible(tester, find.byKey(const Key('reviews-load-more')));
++      expect(backend.requests.last.url.queryParameters['page'], '2');
++      expect(find.text('Bình luận rv3'), findsOneWidget);
++      expect(find.byKey(const Key('reviews-load-more')), findsNothing);
++    });
++  });
++
++  testWidgets('portal thuong hieu: hien chien dich, nguoi danh gia, nhan "Da bi an" va van phan hoi duoc', (tester) async {
++    backend.on('GET', '/brands/me', (_) => [
++      {'id': 'b1', 'name': 'Highlands', 'status': 'APPROVED'},
++    ]);
++    backend.on('GET', '/brands/b1/stores', (_) => []);
++    backend.on('GET', '/campaigns/brand/b1', (_) => []);
++    backend.on('GET', '/brands/b1/reviews', (_) => [
++      review('rv1', status: 'HIDDEN', rating: 1),
++      review('rv2'),
++    ]);
++    backend.on('PATCH', '/reviews/rv1/reply', (_) => {'id': 'rv1'});
++    useDesktopSize(tester);
++    final (app, _) = await buildTestApp(backend, loggedInAs: Roles.brandOwner);
++    await tester.pumpWidget(app);
++    await tester.pumpAndSettle();
++    await openRoute(tester, AppRoutes.brandReviews);
++
++    expect(find.text('Giảm 50k Highlands'), findsNWidgets(2));
++    expect(find.text('Khách rv1'), findsOneWidget);
++    expect(find.text('Đã bị ẩn'), findsOneWidget, reason: 'chi danh gia rv1 bi an');
++
++    await tester.tap(find.text('Phản hồi').first);
++    await tester.pumpAndSettle();
++    await tester.enterText(inDialog(find.byType(TextFormField)), 'Xin lỗi quý khách');
++    await tester.tap(inDialog(find.widgetWithText(FilledButton, 'Gửi')));
++    await tester.pumpAndSettle();
++    expect(backend.bodyOf('PATCH', '/reviews/rv1/reply'), {'reply': 'Xin lỗi quý khách'});
++  });
++
++  testWidgets('portal thuong hieu: REVIEW_ALREADY_REPLIED hien thong diep', (tester) async {
++    backend.on('GET', '/brands/me', (_) => [
++      {'id': 'b1', 'name': 'Highlands', 'status': 'APPROVED'},
++    ]);
++    backend.on('GET', '/brands/b1/stores', (_) => []);
++    backend.on('GET', '/campaigns/brand/b1', (_) => []);
++    backend.on('GET', '/brands/b1/reviews', (_) => [review('rv1')]);
++    backend.on(
++      'PATCH',
++      '/reviews/rv1/reply',
++      (_) => FakeBackend.businessError(400, 'REVIEW_ALREADY_REPLIED', 'Đánh giá này đã được phản hồi.'),
++    );
++    useDesktopSize(tester);
++    final (app, _) = await buildTestApp(backend, loggedInAs: Roles.brandOwner);
++    await tester.pumpWidget(app);
++    await tester.pumpAndSettle();
++    await openRoute(tester, AppRoutes.brandReviews);
++
++    await tester.tap(find.text('Phản hồi'));
++    await tester.pumpAndSettle();
++    await tester.enterText(inDialog(find.byType(TextFormField)), 'Cảm ơn');
++    await tester.tap(inDialog(find.widgetWithText(FilledButton, 'Gửi')));
++    await tester.pumpAndSettle();
++    expect(find.text('Đánh giá này đã được phản hồi.'), findsOneWidget);
++    expect(count('GET', '/brands/b1/reviews'), 2, reason: 'tai lai de hien phan hoi da co');
++  });
++}
+diff --git a/test/widget/report_contract_test.dart b/test/widget/report_contract_test.dart
+index aeb6ec1..6e9b582 100644
+--- a/test/widget/report_contract_test.dart
++++ b/test/widget/report_contract_test.dart
+@@ -53,13 +53,13 @@ void main() {
+       ],
+     );
+     backend.on('PATCH', '/refunds/r1/confirm-manual', (_) => {});
++    backend.on('GET', '/admin/payment-mismatches', (_) => []);
+     final (app, _) = await buildTestApp(backend, loggedInAs: Roles.admin);
+     await tester.pumpWidget(app);
+     await openRoute(tester, AppRoutes.adminRefunds);
++    // UC-07: mot hop thoai duy nhat, bat buoc nhap ma giao dich hoan
+     await tester.tap(find.text('Đã hoàn tiền'));
+     await tester.pumpAndSettle();
+-    await tester.tap(find.widgetWithText(FilledButton, 'Đã hoàn tiền').last);
+-    await tester.pumpAndSettle();
+     await tester.enterText(find.byType(TextFormField), 'BANK-123');
+     await tester.tap(find.text('Xác nhận'));
+     await tester.pumpAndSettle();
+diff --git a/test/widget/store_redeem_test.dart b/test/widget/store_redeem_test.dart
+index 430b452..0817dac 100644
+--- a/test/widget/store_redeem_test.dart
++++ b/test/widget/store_redeem_test.dart
+@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
+ import 'package:flutter_test/flutter_test.dart';
+ import 'package:voucher_platform_web/providers/auth_provider.dart';
+ import 'package:voucher_platform_web/routes.dart';
++import 'package:voucher_platform_web/utils/format.dart';
++import 'package:voucher_platform_web/widgets/qr_scanner_view.dart';
+ 
+ import '../helpers/fake_backend.dart';
+ 
+@@ -13,18 +15,35 @@ Map<String, dynamic> store(String id) => {
+   'status': true,
+ };
+ 
++// Chuoi QR dinh dang v1 con han (client chi kiem dinh dang + han, chu ky do may chu kiem)
++String validQr() =>
++    'v1.0123456789abcdef0123456789abcdef.${DateTime.now().add(const Duration(minutes: 1)).millisecondsSinceEpoch}.c2lnbmF0dXJl_-';
++
++// Ket qua thanh cong theo hop dong moi cua POST /redeem
++Map<String, dynamic> redeemOk({String method = 'OTP', int? billAmount}) => {
++  'message': 'Xác nhận sử dụng thành công.',
++  'redemptionLogId': 'l1',
++  'voucherItemId': 'v1',
++  'voucherCode': 'HL-7Q2K',
++  'redeemedAt': '2026-10-12T03:00:00.000Z',
++  'method': method,
++  'billAmount': billAmount,
++  'billEditableUntil': '2026-10-12T03:10:00.000Z',
++  'campaign': {'id': 'c1', 'title': 'Giảm 50k Highlands', 'voucherType': 'PREPAID', 'faceValue': 100000},
++};
++
+ void main() {
+   late FakeBackend backend;
+ 
+   setUp(() {
+     backend = FakeBackend();
+-    backend.on('POST', '/auth/select-store', (_) => {'ok': true});
++    backend.on('POST', '/auth/select-store', (_) => {'activeStoreId': 'B'});
+     backend.on('GET', '/redeem/my-stores', (_) => [store('A'), store('B')]);
+     backend.on('GET', '/redeem/history/today', (_) => []);
+   });
+ 
+-  // Dang nhap nhan vien -> chon chi nhanh B -> sang man xac nhan, tab OTP
+-  Future<void> openOtpTab(WidgetTester tester) async {
++  // Dang nhap nhan vien -> chon chi nhanh B (gan vao phien) -> sang man xac nhan (tab Quet QR)
++  Future<void> openRedeem(WidgetTester tester) async {
+     useDesktopSize(tester);
+     final (app, _) = await buildTestApp(backend, loggedInAs: Roles.storeStaff);
+     await tester.pumpWidget(app);
+@@ -33,12 +52,31 @@ void main() {
+     expect(find.text('Chọn chi nhánh làm việc'), findsOneWidget);
+     await tester.tap(find.text('Chi nhánh B'));
+     await tester.pumpAndSettle();
++    // FR-AUTH-12: chon chi nhanh goi POST /auth/select-store truoc khi redeem
++    expect(backend.bodyOf('POST', '/auth/select-store'), {'storeId': 'B'});
+     expect(find.text('Xác nhận sử dụng voucher'), findsOneWidget);
++  }
+ 
++  Future<void> openOtpTab(WidgetTester tester) async {
++    await openRedeem(tester);
+     await tester.tap(find.text('Nhập OTP'));
+     await tester.pumpAndSettle();
+   }
+ 
++  Future<void> submitOtp(WidgetTester tester, String otp) async {
++    await tester.enterText(find.byKey(const Key('redeem-otp')), otp);
++    await tapVisible(tester, find.byKey(const Key('redeem-otp-submit')));
++  }
++
++  // Gia lap camera doc duoc ma: bat camera roi goi callback cua QrScannerView
++  Future<void> scanQr(WidgetTester tester, String raw) async {
++    if (find.byType(QrScannerView).evaluate().isEmpty) {
++      await tapVisible(tester, find.text('Bật camera'));
++    }
++    tester.widget<QrScannerView>(find.byType(QrScannerView)).onDetect(raw);
++    await tester.pumpAndSettle();
++  }
++
+   testWidgets(
+     'chua chon chi nhanh ma mo man xac nhan thi yeu cau chon truoc (FR-AUTH-12)',
+     (tester) async {
+@@ -65,23 +103,13 @@ void main() {
+   });
+ 
+   testWidgets(
+-    'OTP hop le: gui kem chi nhanh dang lam, hien ket qua HOP LE mau xanh (NFR-USA-03)',
++    'OTP hop le: gui otpCode kem chi nhanh dang lam, hien HOP LE mau xanh kem ten chien dich (NFR-USA-03)',
+     (tester) async {
+-      backend.on(
+-        'POST',
+-        '/redeem',
+-        (_) => {
+-          'message': 'Redeem thanh cong.',
+-          'voucherItemId': 'v1',
+-          'redeemedAt': '2026-10-12T03:00:00.000Z',
+-        },
+-      );
++      backend.on('POST', '/redeem', (_) => redeemOk(billAmount: 150000));
+       await openOtpTab(tester);
+ 
+       await tester.enterText(find.byKey(const Key('redeem-bill')), '150.000');
+-      await tester.enterText(find.byKey(const Key('redeem-otp')), '123456');
+-      await tester.tap(find.byKey(const Key('redeem-otp-submit')));
+-      await tester.pumpAndSettle();
++      await submitOtp(tester, '123456');
+ 
+       expect(backend.bodyOf('POST', '/redeem'), {
+         'storeId': 'B',
+@@ -90,6 +118,9 @@ void main() {
+       });
+       expect(find.byKey(const Key('redeem-success')), findsOneWidget);
+       expect(find.text('HỢP LỆ'), findsOneWidget);
++      expect(find.text('Giảm 50k Highlands'), findsOneWidget);
++      expect(find.text('Mã voucher: HL-7Q2K'), findsOneWidget);
++      expect(find.textContaining('Hóa đơn: 150.000'), findsOneWidget);
+       expect(
+         find.textContaining('10:00'),
+         findsOneWidget,
+@@ -102,7 +133,32 @@ void main() {
+   );
+ 
+   testWidgets(
+-    'may chu tu choi: hien KHONG HOP LE kem nguyen nhan (FR-REDEEM-07)',
++    'quet QR: gui NGUYEN chuoi qrPayload (khong con nonce), thanh cong hien ten chien dich',
++    (tester) async {
++      backend.on('POST', '/redeem', (_) => redeemOk(method: 'QR'));
++      await openRedeem(tester);
++      final qr = validQr();
++
++      await scanQr(tester, qr);
++
++      final body = backend.bodyOf('POST', '/redeem');
++      expect(body, {'storeId': 'B', 'qrPayload': qr});
++      expect(body.containsKey('nonce'), isFalse);
++      expect(find.byKey(const Key('redeem-success')), findsOneWidget);
++      expect(find.text('Giảm 50k Highlands'), findsOneWidget);
++      expect(find.textContaining('Quét QR'), findsWidgets);
++    },
++  );
++
++  testWidgets('QR sai dinh dang (dinh dang cu) bao MA KHONG HOP LE, khong goi API', (tester) async {
++    await openRedeem(tester);
++    await scanQr(tester, 'item-1.abc123.1700000000000.sig');
++    expect(find.text('MÃ KHÔNG HỢP LỆ'), findsOneWidget);
++    expect(backend.called('POST', '/redeem'), isFalse);
++  });
++
++  testWidgets(
++    'may chu tu choi (loi khong co reason): hien KHONG HOP LE kem nguyen nhan (FR-REDEEM-07)',
+     (tester) async {
+       backend.on(
+         'POST',
+@@ -113,10 +169,7 @@ void main() {
+         ),
+       );
+       await openOtpTab(tester);
+-
+-      await tester.enterText(find.byKey(const Key('redeem-otp')), '654321');
+-      await tester.tap(find.byKey(const Key('redeem-otp-submit')));
+-      await tester.pumpAndSettle();
++      await submitOtp(tester, '654321');
+ 
+       expect(find.byKey(const Key('redeem-error')), findsOneWidget);
+       expect(find.text('KHÔNG HỢP LỆ'), findsOneWidget);
+@@ -127,6 +180,184 @@ void main() {
+     },
+   );
+ 
++  testWidgets('VOUCHER_USED: hien DA SU DUNG kem gio va chi nhanh da dung', (tester) async {
++    backend.on(
++      'POST',
++      '/redeem',
++      (_) => FakeBackend.businessError(
++        400,
++        'VOUCHER_USED',
++        'Voucher đã được sử dụng.',
++        details: {'usedAt': '2026-10-12T03:00:00.000Z', 'storeId': 'q3', 'storeName': 'Chi nhánh Q3'},
++      ),
++    );
++    await openOtpTab(tester);
++    await submitOtp(tester, '123456');
++
++    expect(find.byKey(const Key('redeem-error')), findsOneWidget);
++    expect(find.text('ĐÃ SỬ DỤNG'), findsOneWidget);
++    expect(find.text('Đã dùng lúc 10:00 12/10/2026 tại Chi nhánh Q3'), findsOneWidget);
++  });
++
++  testWidgets('WRONG_STORE: hien SAI CHI NHANH kem danh sach chi nhanh ap dung', (tester) async {
++    backend.on(
++      'POST',
++      '/redeem',
++      (_) => FakeBackend.businessError(
++        400,
++        'WRONG_STORE',
++        'Voucher không áp dụng tại chi nhánh này.',
++        details: {
++          'stores': [
++            {'id': 's3', 'name': 'Q3 Võ Văn Tần', 'address': '2 Võ Văn Tần'},
++            {'id': 's7', 'name': 'Q7 Crescent', 'address': '5 Nguyễn Lương Bằng'},
++          ],
++        },
++      ),
++    );
++    await openOtpTab(tester);
++    await submitOtp(tester, '123456');
++
++    expect(find.text('SAI CHI NHÁNH'), findsOneWidget);
++    expect(find.text('Áp dụng tại:'), findsOneWidget);
++    expect(find.text('• Q3 Võ Văn Tần — 2 Võ Văn Tần'), findsOneWidget);
++    expect(find.text('• Q7 Crescent — 5 Nguyễn Lương Bằng'), findsOneWidget);
++  });
++
++  testWidgets('cac ly do khac: tieu de ngan theo reason', (tester) async {
++    final cases = {
++      'VOUCHER_EXPIRED': 'VOUCHER HẾT HẠN',
++      'TOKEN_EXPIRED': 'MÃ ĐÃ HẾT HẠN',
++      'TOKEN_REVOKED': 'MÃ KHÔNG HỢP LỆ',
++      'TOKEN_USED': 'MÃ KHÔNG HỢP LỆ',
++      'VOUCHER_REFUND_PENDING': 'ĐANG CHỜ HOÀN TIỀN',
++      'VOUCHER_REFUNDED': 'ĐÃ HOÀN TIỀN',
++      'OTP_INVALID': 'SAI MÃ OTP',
++    };
++    var reason = '';
++    backend.on('POST', '/redeem', (_) => FakeBackend.businessError(400, reason, 'Thông điệp $reason'));
++    await openOtpTab(tester);
++    for (final entry in cases.entries) {
++      reason = entry.key;
++      await submitOtp(tester, '123456');
++      expect(find.text(entry.value), findsOneWidget, reason: entry.key);
++      if (entry.key != 'TOKEN_EXPIRED') {
++        expect(find.text('Thông điệp ${entry.key}'), findsOneWidget, reason: entry.key);
++      }
++      await tapVisible(tester, find.byKey(const Key('redeem-next')));
++      await tester.tap(find.text('Nhập OTP'));
++      await tester.pumpAndSettle();
++    }
++  });
++
++  testWidgets(
++    'OTP_LOCKED: khoa o nhap OTP den lockedUntil, van quet QR duoc (FR-REDEEM-12)',
++    (tester) async {
++      final lockedUntil = DateTime.now().toUtc().add(const Duration(minutes: 15));
++      backend.on('POST', '/redeem', (request) {
++        return request.body.contains('qrPayload')
++            ? redeemOk(method: 'QR')
++            : FakeBackend.businessError(
++                429,
++                'OTP_LOCKED',
++                'Nhập sai OTP quá nhiều lần.',
++                details: {'lockedUntil': lockedUntil.toIso8601String()},
++              );
++      });
++      await openOtpTab(tester);
++      await submitOtp(tester, '000000');
++
++      expect(find.byKey(const Key('redeem-error')), findsNothing, reason: 'khong phai ket qua cua voucher');
++      expect(find.byKey(const Key('redeem-otp-locked')), findsOneWidget);
++      expect(
++        find.text('Ô nhập OTP bị khóa đến ${formatTime(lockedUntil)}, hãy quét mã QR'),
++        findsOneWidget,
++      );
++      expect(find.textContaining('Mở khóa sau'), findsOneWidget);
++      expect(tester.widget<TextFormField>(find.byKey(const Key('redeem-otp'))).enabled, isFalse);
++      expect(tester.widget<FilledButton>(find.byKey(const Key('redeem-otp-submit'))).onPressed, isNull);
++
++      final posts = backend.requests.where((r) => r.method == 'POST' && r.url.path == '/api/redeem').length;
++      await tapVisible(tester, find.text('Chuyển sang quét QR'));
++      final qr = validQr();
++      await scanQr(tester, qr);
++      expect(
++        backend.requests.where((r) => r.method == 'POST' && r.url.path == '/api/redeem').length,
++        posts + 1,
++      );
++      expect(backend.bodyOf('POST', '/redeem'), {'storeId': 'B', 'qrPayload': qr});
++      expect(find.byKey(const Key('redeem-success')), findsOneWidget);
++    },
++  );
++
++  testWidgets(
++    'BILL_REQUIRED: khong hien do, bao loi tai o hoa don, gui lai DUNG ma kem hoa don -> HOP LE (BR-03)',
++    (tester) async {
++      backend.on('POST', '/redeem', (request) {
++        return request.body.contains('billAmount')
++            ? redeemOk(method: 'QR', billAmount: 150000)
++            : FakeBackend.businessError(
++                400,
++                'BILL_REQUIRED',
++                'Voucher mệnh giá bắt buộc nhập giá trị hóa đơn (BR-03).',
++                details: {'voucherType': 'PREPAID', 'faceValue': 100000},
++              );
++      });
++      await openRedeem(tester);
++      final qr = validQr();
++      await scanQr(tester, qr);
++
++      expect(find.byKey(const Key('redeem-error')), findsNothing);
++      expect(find.byKey(const Key('redeem-bill-required')), findsOneWidget);
++      expect(find.textContaining('bắt buộc nhập giá trị hóa đơn'), findsOneWidget);
++      expect(find.textContaining('100.000'), findsOneWidget);
++      final billInput = tester.widget<EditableText>(
++        find.descendant(of: find.byKey(const Key('redeem-bill')), matching: find.byType(EditableText)),
++      );
++      expect(billInput.focusNode.hasFocus, isTrue, reason: 'dua con tro vao o hoa don');
++
++      // Bo trong ma bam gui lai: van bao bat buoc, khong goi may chu
++      await tapVisible(tester, find.byKey(const Key('redeem-resubmit')));
++      expect(backend.requests.where((r) => r.url.path == '/api/redeem').length, 1);
++
++      await tester.enterText(find.byKey(const Key('redeem-bill')), '150.000');
++      await tapVisible(tester, find.byKey(const Key('redeem-resubmit')));
++
++      expect(backend.bodyOf('POST', '/redeem'), {'storeId': 'B', 'qrPayload': qr, 'billAmount': 150000});
++      expect(find.byKey(const Key('redeem-success')), findsOneWidget);
++      expect(find.byKey(const Key('redeem-bill-required')), findsNothing);
++    },
++  );
++
++  testWidgets('BILL_REQUIRED voi OTP: giu OTP da nhap, gui lai kem hoa don', (tester) async {
++    backend.on('POST', '/redeem', (request) {
++      return request.body.contains('billAmount')
++          ? redeemOk(billAmount: 90000)
++          : FakeBackend.businessError(400, 'BILL_REQUIRED', 'Thiếu hóa đơn.', details: {'voucherType': 'PREPAID', 'faceValue': 100000});
++    });
++    await openOtpTab(tester);
++    await submitOtp(tester, '123456');
++    expect(find.byKey(const Key('redeem-bill-required')), findsOneWidget);
++
++    await tester.enterText(find.byKey(const Key('redeem-bill')), '90000');
++    await tapVisible(tester, find.byKey(const Key('redeem-resubmit')));
++    expect(backend.bodyOf('POST', '/redeem'), {'storeId': 'B', 'otpCode': '123456', 'billAmount': 90000});
++    expect(find.byKey(const Key('redeem-success')), findsOneWidget);
++  });
++
++  testWidgets('STORE_NOT_SELECTED: dua nhan vien ve man chon chi nhanh', (tester) async {
++    backend.on(
++      'POST',
++      '/redeem',
++      (_) => FakeBackend.businessError(400, 'STORE_NOT_SELECTED', 'Vui lòng chọn chi nhánh làm việc trong phiên.'),
++    );
++    await openOtpTab(tester);
++    await submitOtp(tester, '123456');
++
++    expect(find.text('Chọn chi nhánh làm việc'), findsOneWidget);
++    expect(find.text('Vui lòng chọn chi nhánh làm việc trong phiên.'), findsOneWidget);
++  });
++
+   testWidgets('lich su trong ngay hien cac luot xac nhan (FR-REDEEM-10)', (
+     tester,
+   ) async {
+@@ -137,10 +368,15 @@ void main() {
+         {
+           'id': 'l1',
+           'voucherItemId': 'v1',
++          'voucherCode': 'HL-1',
++          'campaignTitle': 'Giảm 50k Highlands',
++          'voucherType': 'PREPAID',
+           'storeId': 'A',
++          'storeName': 'Chi nhánh A',
+           'method': 'OTP',
+           'redeemedAt': '2026-10-12T02:30:00Z',
+           'billAmount': '90000',
++          'billEditable': false,
+         },
+       ],
+     );
+@@ -152,8 +388,94 @@ void main() {
+     await tester.tap(find.text('Lịch sử trong ngày'));
+     await tester.pumpAndSettle();
+     expect(find.text('1 lượt xác nhận'), findsOneWidget);
++    expect(find.text('Giảm 50k Highlands'), findsOneWidget);
++    expect(find.textContaining('Mã HL-1'), findsOneWidget);
+     expect(find.textContaining('Phương thức OTP'), findsOneWidget);
+     expect(find.textContaining('90.000'), findsOneWidget);
++    expect(find.text('Sửa hóa đơn'), findsNothing, reason: 'qua 10 phut thi khong sua duoc');
++  });
++
++  testWidgets('lich su: chi luot con trong 10 phut moi co "Sua hoa don", PATCH dung URL / body (FR-REDEEM-08)', (
++    tester,
++  ) async {
++    Map<String, dynamic> log(String id, {required bool editable, int? bill}) => {
++      'id': id,
++      'voucherItemId': 'v-$id',
++      'voucherCode': 'CODE-$id',
++      'campaignTitle': 'Chiến dịch $id',
++      'storeId': 'A',
++      'storeName': 'Chi nhánh A',
++      'method': 'QR',
++      'redeemedAt': '2026-10-12T02:30:00Z',
++      'billAmount': bill,
++      'billEditable': editable,
++    };
++    backend.on('GET', '/redeem/history/today', (_) => [log('l1', editable: true, bill: 90000), log('l2', editable: false)]);
++    backend.on('PATCH', '/redeem/logs/l1/bill', (_) => log('l1', editable: true, bill: 120000));
++    useDesktopSize(tester);
++    final (app, _) = await buildTestApp(backend, loggedInAs: Roles.storeStaff);
++    await tester.pumpWidget(app);
++    await tester.pumpAndSettle();
++    await tester.tap(find.text('Lịch sử trong ngày'));
++    await tester.pumpAndSettle();
++
++    expect(find.text('Sửa hóa đơn'), findsOneWidget);
++    expect(find.byKey(const Key('edit-bill-l1')), findsOneWidget);
++    expect(find.byKey(const Key('edit-bill-l2')), findsNothing);
++
++    await tester.tap(find.byKey(const Key('edit-bill-l1')));
++    await tester.pumpAndSettle();
++    final field = find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextFormField));
++    expect(tester.widget<TextFormField>(field).controller?.text, '90000', reason: 'dien san gia tri cu');
++
++    await tester.enterText(field, 'abc');
++    await tester.tap(find.widgetWithText(FilledButton, 'Lưu'));
++    await tester.pumpAndSettle();
++    expect(find.text('Vui lòng nhập giá trị hóa đơn hợp lệ'), findsOneWidget);
++    expect(backend.called('PATCH', '/redeem/logs/l1/bill'), isFalse);
++
++    await tester.enterText(field, '120.000');
++    await tester.tap(find.widgetWithText(FilledButton, 'Lưu'));
++    await tester.pumpAndSettle();
++    expect(backend.bodyOf('PATCH', '/redeem/logs/l1/bill'), {'billAmount': 120000});
++    expect(find.textContaining('Hóa đơn 120.000'), findsOneWidget);
++    expect(find.text('Đã cập nhật giá trị hóa đơn.'), findsOneWidget);
++  });
++
++  testWidgets('lich su: qua han sua hoa don (BILL_EDIT_EXPIRED) thi bao loi', (tester) async {
++    var expired = false;
++    backend.on('GET', '/redeem/history/today', (_) => [
++      {
++        'id': 'l1',
++        'storeId': 'A',
++        'method': 'QR',
++        'redeemedAt': '2026-10-12T02:30:00Z',
++        'billEditable': !expired,
++      },
++    ]);
++    backend.on('PATCH', '/redeem/logs/l1/bill', (_) {
++      expired = true;
++      return FakeBackend.businessError(
++        400,
++        'BILL_EDIT_EXPIRED',
++        'Chỉ sửa được giá trị hóa đơn trong 10 phút sau khi xác nhận.',
++      );
++    });
++    useDesktopSize(tester);
++    final (app, _) = await buildTestApp(backend, loggedInAs: Roles.storeStaff);
++    await tester.pumpWidget(app);
++    await tester.pumpAndSettle();
++    await tester.tap(find.text('Lịch sử trong ngày'));
++    await tester.pumpAndSettle();
++
++    await tester.tap(find.text('Sửa hóa đơn'));
++    await tester.pumpAndSettle();
++    await tester.enterText(find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextFormField)), '50000');
++    await tester.tap(find.widgetWithText(FilledButton, 'Lưu'));
++    await tester.pumpAndSettle();
++
++    expect(find.text('Chỉ sửa được giá trị hóa đơn trong 10 phút sau khi xác nhận.'), findsOneWidget);
++    expect(find.text('Sửa hóa đơn'), findsNothing, reason: 'tai lai lich su, het han thi an nut');
+   });
+ 
+   testWidgets(
+
+base-commit: b08b91d713a7b211ea0509c05b9b121c28d49a7b
+-- 
+2.49.0.windows.1
+

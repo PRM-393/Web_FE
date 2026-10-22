@@ -9,6 +9,7 @@ import 'screens/admin/brand_approval_screen.dart';
 import 'screens/admin/campaign_approval_screen.dart';
 import 'screens/admin/commission_config_screen.dart';
 import 'screens/admin/refund_admin_screen.dart';
+import 'screens/admin/review_moderation_screen.dart';
 import 'screens/admin/settlement_admin_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/brand/brand_profile_screen.dart';
@@ -56,6 +57,7 @@ class AppRoutes {
   static const adminSettlements = '/admin/settlements';
   static const adminCommission = '/admin/commission';
   static const adminRefunds = '/admin/refunds';
+  static const adminReviews = '/admin/reviews';
 
   // Trang chu theo vai tro sau khi dang nhap
   static String homeOf(String? role) => switch (role) {
@@ -126,6 +128,7 @@ class AppRoutes {
         adminSettlements => const SettlementAdminScreen(),
         adminCommission => const CommissionConfigScreen(),
         adminRefunds => const RefundAdminScreen(),
+        adminReviews => const ReviewModerationScreen(),
         _ => const NotFoundScreen(),
       };
 }
