@@ -8,7 +8,10 @@ import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/portal_shell.dart';
 
-// FR-BRAND-03, FR-REPORT-04: duyet / tu choi ho so thuong hieu kem ly do
+// FR-BRAND-03, FR-REPORT-04: duyet / tu choi ho so thuong hieu kem ly do.
+// FR-BRAND-09 (F07): dinh chi thuong hieu dang hoat dong / khoi phuc thuong hieu bi dinh chi.
+const _tabs = ['PENDING', 'APPROVED', 'SUSPENDED'];
+
 class BrandApprovalScreen extends StatefulWidget {
   const BrandApprovalScreen({super.key});
 
@@ -18,19 +21,35 @@ class BrandApprovalScreen extends StatefulWidget {
 
 class _BrandApprovalScreenState extends State<BrandApprovalScreen> {
   late Future<List<Brand>> _future;
+  String _tab = _tabs.first;
 
   AdminService get _service => context.read<AdminService>();
+
+  Future<List<Brand>> _load() => _tab == 'PENDING' ? _service.pendingBrands() : _service.brandsByStatus(_tab);
 
   @override
   void initState() {
     super.initState();
-    _future = _service.pendingBrands();
+    _future = _load();
   }
 
   void _reload() {
     setState(() {
-      _future = _service.pendingBrands();
+      _future = _load();
     });
+  }
+
+  void _select(String tab) {
+    if (tab == _tab) return;
+    _tab = tab;
+    _reload();
+  }
+
+  Future<void> _suspend(Brand b) async {
+    final reason = await promptTextDialog(context, title: 'Đình chỉ "${b.name}"', label: 'Lý do đình chỉ', confirm: 'Đình chỉ');
+    if (reason != null) {
+      await _run(() => _service.suspendBrand(b.id, reason), 'Đã đình chỉ "${b.name}". Các chiến dịch đang bán đã tạm dừng.');
+    }
   }
 
   Future<void> _run(Future<void> Function() action, String success) async {
@@ -56,15 +75,31 @@ class _BrandApprovalScreenState extends State<BrandApprovalScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             PageHeader(
-              title: 'Hồ sơ thương hiệu chờ duyệt',
+              title: 'Thương hiệu',
               actions: [IconButton(tooltip: 'Tải lại', onPressed: _reload, icon: const Icon(Icons.refresh))],
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.md),
+              child: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'PENDING', label: Text('Chờ duyệt'), icon: Icon(Icons.hourglass_top)),
+                  ButtonSegment(value: 'APPROVED', label: Text('Đang hoạt động'), icon: Icon(Icons.verified_outlined)),
+                  ButtonSegment(value: 'SUSPENDED', label: Text('Bị đình chỉ'), icon: Icon(Icons.block)),
+                ],
+                selected: {_tab},
+                onSelectionChanged: (s) => _select(s.first),
+              ),
             ),
             Expanded(
               child: AsyncBody<List<Brand>>(
                 future: _future,
                 onRetry: _reload,
                 isEmpty: (list) => list.isEmpty,
-                emptyMessage: 'Không có hồ sơ nào đang chờ duyệt.',
+                emptyMessage: switch (_tab) {
+                  'APPROVED' => 'Chưa có thương hiệu nào đang hoạt động.',
+                  'SUSPENDED' => 'Không có thương hiệu nào bị đình chỉ.',
+                  _ => 'Không có hồ sơ nào đang chờ duyệt.',
+                },
                 builder: (context, brands) => ListView.separated(
                   padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
                   itemCount: brands.length,
@@ -81,8 +116,24 @@ class _BrandApprovalScreenState extends State<BrandApprovalScreen> {
                             if (b.description != null && b.description!.isNotEmpty) Text(b.description!),
                             if (b.contactInfo != null) Text('Liên hệ: ${b.contactInfo}'),
                             if (b.bankInfo != null) Text('Tài khoản nhận tiền: ${b.bankInfo}'),
+                            if (_tab == 'SUSPENDED' && b.rejectReason != null)
+                              Text('Lý do đình chỉ: ${b.rejectReason}', style: const TextStyle(color: AppColors.danger)),
                             const SizedBox(height: AppSpacing.sm),
-                            Wrap(spacing: AppSpacing.sm, children: [
+                            if (_tab == 'APPROVED')
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
+                                onPressed: () => _suspend(b),
+                                icon: const Icon(Icons.block),
+                                label: const Text('Đình chỉ'),
+                              ),
+                            if (_tab == 'SUSPENDED')
+                              FilledButton.icon(
+                                style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
+                                onPressed: () => _run(() => _service.reinstateBrand(b.id), 'Đã khôi phục "${b.name}".'),
+                                icon: const Icon(Icons.restart_alt),
+                                label: const Text('Khôi phục'),
+                              ),
+                            if (_tab == 'PENDING') Wrap(spacing: AppSpacing.sm, children: [
                               FilledButton.icon(
                                 style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
                                 onPressed: () => _run(() => _service.approveBrand(b.id), 'Đã duyệt "${b.name}".'),

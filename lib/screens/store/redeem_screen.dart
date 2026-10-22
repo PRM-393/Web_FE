@@ -206,7 +206,7 @@ class _RedeemPanelState extends State<_RedeemPanel> with SingleTickerProviderSta
                   },
                   decoration: InputDecoration(
                     labelText: 'Giá trị hóa đơn (VND)',
-                    helperText: 'Bắt buộc với voucher mệnh giá, không bắt buộc với loại khác (FR-REDEEM-08)',
+                    helperText: 'Bắt buộc với voucher mệnh giá, không bắt buộc với loại khác',
                     errorText: _billError ?? (requirement == null ? null : _billRequiredText(requirement)),
                     errorMaxLines: 2,
                   ),

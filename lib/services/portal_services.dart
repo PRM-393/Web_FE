@@ -214,6 +214,16 @@ class AdminService {
   Future<void> rejectBrand(String id, String reason) =>
       _api.patch('/brands/$id/reject', body: {'reason': reason});
 
+  // FR-BRAND-09: thuong hieu theo trang thai (APPROVED / SUSPENDED ...)
+  Future<List<Brand>> brandsByStatus(String status) async =>
+      asList(await _api.get('/brands', query: {'status': status}), Brand.fromJson);
+
+  // Dinh chi: chien dich dang ban chuyen tam dung; khoi phuc: thuong hieu hoat dong lai
+  Future<void> suspendBrand(String id, String reason) =>
+      _api.patch('/brands/$id/suspend', body: {'reason': reason});
+
+  Future<void> reinstateBrand(String id) => _api.patch('/brands/$id/reinstate');
+
   Future<List<VoucherCampaign>> pendingCampaigns() async => asList(
     await _api.get('/admin/pending/campaigns'),
     VoucherCampaign.fromJson,

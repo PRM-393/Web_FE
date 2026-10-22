@@ -294,7 +294,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                           ),
                           const Padding(
                             padding: EdgeInsets.only(top: AppSpacing.xs),
-                            child: Text('Hạn sử dụng phải sau ngày kết thúc bán ít nhất 10 ngày (DC-10).',
+                            child: Text('Hạn sử dụng phải sau ngày kết thúc bán ít nhất 10 ngày.',
                                 style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                           ),
                           if (!_isEdit) ...[

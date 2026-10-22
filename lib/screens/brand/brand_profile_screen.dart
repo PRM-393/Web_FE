@@ -56,7 +56,7 @@ class _BrandInfo extends StatelessWidget {
       BrandStatus.suspended => (
           Icons.gpp_bad_outlined,
           AppColors.danger,
-          'Thương hiệu đang bị đình chỉ: các chiến dịch đang bán đã tạm dừng, không gửi duyệt được chiến dịch mới (FR-BRAND-09).'
+          'Thương hiệu đang bị đình chỉ: các chiến dịch đang bán đã tạm dừng, không gửi duyệt được chiến dịch mới.'
         ),
       BrandStatus.rejected => (
           Icons.cancel_outlined,
@@ -158,7 +158,7 @@ class _RegisterBrandFormState extends State<_RegisterBrandForm> {
   @override
   Widget build(BuildContext context) => ListView(
         children: [
-          const PageHeader(title: 'Đăng ký thương hiệu', subtitle: 'Hồ sơ sẽ ở trạng thái chờ duyệt (FR-BRAND-02)'),
+          const PageHeader(title: 'Đăng ký thương hiệu', subtitle: 'Hồ sơ sẽ ở trạng thái chờ duyệt'),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
             child: ConstrainedBox(
