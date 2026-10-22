@@ -36,6 +36,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   provider: ^6.1.5+1
   http: ^1.6.0
+  # F13: tai file CSV doi soat tren trinh duyet
+  web: ^1.1.1
   flutter_secure_storage: ^11.2.0
   intl: ^0.20.3
   mobile_scanner: ^7.4.2

@@ -180,7 +180,7 @@ void main() {
 
       await tester.tap(find.text('Duyệt thương hiệu'));
       await tester.pumpAndSettle();
-      expect(find.text('Hồ sơ thương hiệu chờ duyệt'), findsOneWidget);
+      expect(find.text('Thương hiệu'), findsOneWidget);
       expect(find.text('Phúc Long'), findsOneWidget);
     });
 

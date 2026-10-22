@@ -82,7 +82,7 @@ class _CampaignListState extends State<_CampaignList> {
     final ok = await confirmDialog(
       context,
       title: 'Tạm dừng bán',
-      message: 'Khách sẽ không mua mới được. Voucher đã bán vẫn dùng bình thường (FR-CAMP-08).',
+      message: 'Khách sẽ không mua mới được. Voucher đã bán vẫn dùng bình thường.',
       confirm: 'Tạm dừng',
     );
     if (ok) await _run(() => _service.pause(c.id), 'Đã tạm dừng chiến dịch.');
@@ -111,7 +111,7 @@ class _CampaignListState extends State<_CampaignList> {
       ),
       if (!widget.brand.isApproved)
         const _Banner(
-          'Thương hiệu chưa được duyệt: bạn có thể tạo chiến dịch nháp nhưng chưa gửi duyệt được (BR-26).',
+          'Thương hiệu chưa được duyệt: bạn có thể tạo chiến dịch nháp nhưng chưa gửi duyệt được.',
         ),
       Expanded(
         child: AsyncBody<List<VoucherCampaign>>(

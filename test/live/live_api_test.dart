@@ -82,6 +82,18 @@ void main() {
     access = (await step('quan tri: dang nhap', () => auth.login('admin@voucher.local', password)))?.accessToken;
     await step('quan tri: dashboard', () => admin.dashboard());
     await step('quan tri: thuong hieu cho duyet', () => admin.pendingBrands());
+    final active = await step('quan tri: thuong hieu dang hoat dong', () => admin.brandsByStatus('APPROVED'));
+    final target = active?.firstWhere((b) => b.name == 'Highlands Coffee');
+    await step('quan tri: dinh chi thuong hieu', () async {
+      await admin.suspendBrand(target!.id, 'Kiem tra tich hop');
+      final suspended = await admin.brandsByStatus('SUSPENDED');
+      if (!suspended.any((b) => b.id == target.id)) throw 'chua dinh chi';
+    });
+    await step('quan tri: khoi phuc thuong hieu', () async {
+      await admin.reinstateBrand(target!.id);
+      final again = await admin.brandsByStatus('APPROVED');
+      if (!again.any((b) => b.id == target.id)) throw 'chua khoi phuc';
+    });
     final pending = await step('quan tri: chien dich cho duyet', () => admin.pendingCampaigns());
     await step('quan tri: duyet chien dich', () => admin.approveCampaign(pending!.firstWhere((c) => c.id == created!.id).id));
     final rate = await step('quan tri: xem ty le hoa hong', () => admin.commissionRate());
