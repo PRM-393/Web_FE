@@ -62,6 +62,30 @@ class BrandService {
     },
   );
 
+  // FR-BRAND-04: sua chi nhanh. Chi gui cac truong co thay doi; status = true de mo lai chi nhanh
+  // da vo hieu (may chu doi hoi co toa do moi cho mo lai - DC-05).
+  Future<void> updateStore(
+    String storeId, {
+    String? name,
+    String? address,
+    double? latitude,
+    double? longitude,
+    String? phone,
+    String? openingHours,
+    bool? status,
+  }) => _api.patch(
+    '/brands/stores/$storeId',
+    body: {
+      'name': ?name,
+      'address': ?address,
+      'latitude': ?latitude,
+      'longitude': ?longitude,
+      'phone': ?phone,
+      'openingHours': ?openingHours,
+      'status': ?status,
+    },
+  );
+
   Future<void> deactivateStore(String storeId) =>
       _api.patch('/brands/stores/$storeId/deactivate');
 
@@ -166,6 +190,12 @@ class RedeemService {
 
 // Chuc nang quan tri - UC-04, UC-05, FR-REPORT-03/04, FR-SETTLE-01/07, FR-REFUND-06
 class AdminService {
+  Future<List<Map<String, dynamic>>> categories() async => (await _api.get('/admin/categories') as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  Future<void> saveCategory(String name, {String? id}) async {
+    if (id == null) { await _api.post('/admin/categories', body: {'name': name}); }
+    else { await _api.patch('/admin/categories/$id', body: {'name': name}); }
+  }
+  Future<void> deleteCategory(String id) => _api.delete('/admin/categories/$id');
   AdminService(this._api);
 
   final ApiClient _api;

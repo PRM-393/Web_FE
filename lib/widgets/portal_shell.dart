@@ -55,6 +55,7 @@ const _adminNav = [
   PortalNavItem(AppRoutes.adminSettlements, 'Đối soát', Icons.account_balance_outlined),
   PortalNavItem(AppRoutes.adminCommission, 'Tỷ lệ hoa hồng', Icons.percent),
   PortalNavItem(AppRoutes.adminRefunds, 'Hoàn tiền thủ công', Icons.currency_exchange),
+  PortalNavItem(AppRoutes.adminCategories, 'Danh mục ngành hàng', Icons.category_outlined),
   PortalNavItem(AppRoutes.adminReviews, 'Đánh giá', Icons.rate_review_outlined),
 ];
 

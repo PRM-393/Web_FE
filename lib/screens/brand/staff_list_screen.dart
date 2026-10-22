@@ -13,7 +13,8 @@ import '../../widgets/common.dart';
 import '../../widgets/portal_shell.dart';
 
 // FR-BRAND-05/06: tao tai khoan nhan vien, gan vao chi nhanh cua chinh thuong hieu (BR-19), vo hieu hoa.
-// Moi lan gan la mot dong; mot nhan vien co the duoc gan nhieu chi nhanh.
+// Moi lan gan la mot dong; mot nhan vien co the duoc gan nhieu chi nhanh, moi chi nhanh chi mot dong.
+// Vo hieu hoa o day la khoa ca tai khoan (nghi viec) va thu hoi moi phien, khong phai go khoi mot chi nhanh.
 class StaffListScreen extends StatelessWidget {
   const StaffListScreen({super.key});
 
@@ -64,9 +65,11 @@ class _StaffListState extends State<_StaffList> {
   }
 
   Future<void> _deactivate(StaffMember m) async {
+    // FR-BRAND-06 / FR-AUTH-10: vo hieu hoa la tat ca tai khoan, khong rieng chi nhanh dang xem
     final ok = await confirmDialog(context,
         title: 'Vô hiệu hóa nhân viên',
-        message: '${m.email} sẽ không xác nhận sử dụng voucher tại ${m.storeName ?? 'chi nhánh này'} nữa.',
+        message: 'Tài khoản ${m.email} sẽ bị khóa ở mọi chi nhánh của thương hiệu và '
+            'mọi phiên đăng nhập bị thu hồi ngay. Dùng cho nhân viên đã nghỉ việc.',
         confirm: 'Vô hiệu hóa');
     if (!ok) return;
     try {

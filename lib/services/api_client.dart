@@ -29,6 +29,8 @@ class ApiClient {
   String? Function()? accessTokenGetter;
   Future<bool> Function()? onUnauthorized;
 
+  Future<dynamic> delete(String path) => _send('DELETE', path);
+
   Future<dynamic> get(String path, {Map<String, Object?>? query}) =>
       _send('GET', path, query: query);
 

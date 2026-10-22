@@ -19,7 +19,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final api = ApiClient(baseUrl: Env.apiBaseUrl);
-  final auth = AuthProvider(api: api, authService: AuthService(api), storage: TokenStorage());
+  final auth = AuthProvider(api: api, authService: AuthService(api, deviceId: TokenStorage().deviceId), storage: TokenStorage());
   await auth.hydrate();
 
   runApp(buildApp(api: api, auth: auth));
@@ -31,6 +31,7 @@ Widget buildApp({required ApiClient api, required AuthProvider auth}) {
   final redeemService = RedeemService(api);
   return MultiProvider(
     providers: [
+      Provider(create: (_) => AuthService(api)),
       Provider.value(value: brandService),
       Provider.value(value: redeemService),
       Provider(create: (_) => CampaignService(api)),
