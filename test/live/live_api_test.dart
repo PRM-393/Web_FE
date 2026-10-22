@@ -45,7 +45,7 @@ void main() {
     final myStores = await step('cua hang: chi nhanh duoc gan', () => redeem.myStores());
     final storeId = myStores?.first.id;
     await step('cua hang: chon chi nhanh', () => redeem.selectStore(storeId!));
-    await step('cua hang: redeem bang OTP tu app', () => redeem.redeem(storeId: storeId!, otpCode: state['otpCode'] as String?));
+    await step('cua hang: redeem bang OTP tu app', () => redeem.redeem(storeId: storeId!, otpCode: state['otpCode'] as String?, billAmount: 150000));
     await step('cua hang: lich su trong ngay', () => redeem.historyToday());
     await step('cua hang: dang xuat', () => auth.logout());
 
