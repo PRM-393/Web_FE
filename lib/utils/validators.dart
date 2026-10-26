@@ -1,18 +1,20 @@
 // Kiem tra du lieu nhap tren form (Form + TextFormField.validator). May chu van kiem tra lai (NFR-SEC-03).
 // Ham tra ve null khi hop le, nguoc lai tra ve thong bao loi tieng Viet.
 
+import '../config/env.dart';
+
 final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
 String? validateEmail(String? value) {
   final v = value?.trim() ?? '';
   if (v.isEmpty) return 'Vui lòng nhập email';
-  if (!_emailPattern.hasMatch(v)) return 'Email không hợp lệ';
+  if (!Env.demoLogin && !_emailPattern.hasMatch(v)) return 'Email không hợp lệ';
   return null;
 }
 
 String? validatePassword(String? value) {
   if (value == null || value.isEmpty) return 'Vui lòng nhập mật khẩu';
-  if (value.length < 6) return 'Mật khẩu tối thiểu 6 ký tự';
+  if (!Env.demoLogin && value.length < 6) return 'Mật khẩu tối thiểu 6 ký tự';
   return null;
 }
 
