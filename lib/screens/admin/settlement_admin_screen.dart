@@ -6,6 +6,8 @@ import '../../routes.dart';
 import '../../services/portal_services.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/format.dart';
+import '../../utils/download/file_download.dart';
+import '../../utils/settlement_csv.dart';
 import '../../widgets/common.dart';
 import '../../widgets/portal_shell.dart';
 import '../../widgets/settlement_tile.dart';
@@ -79,6 +81,17 @@ class _SettlementAdminScreenState extends State<SettlementAdminScreen> {
     });
   }
 
+  // FR-SETTLE-07: xuat danh sach phieu ra CSV
+  Future<void> _exportCsv() async {
+    try {
+      final items = await _future;
+      final ok = await downloadTextFile('doi-soat-${DateTime.now().toIso8601String().substring(0, 10)}.csv', settlementsToCsv(items, includeBrand: true));
+      if (mounted) showMessage(context, ok ? 'Đã xuất ${items.length} phiếu ra CSV.' : 'Chỉ xuất được CSV trên trình duyệt.');
+    } catch (e) {
+      if (mounted) showMessage(context, e.toString(), error: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => PortalShell(
         currentRoute: AppRoutes.adminSettlements,
@@ -93,6 +106,7 @@ class _SettlementAdminScreenState extends State<SettlementAdminScreen> {
                   icon: const Icon(Icons.play_circle_outline),
                   label: const Text('Chốt đối soát tháng trước'),
                 ),
+                OutlinedButton.icon(onPressed: _exportCsv, icon: const Icon(Icons.download), label: const Text('Xuất CSV')),
                 IconButton(tooltip: 'Tải lại', onPressed: _reload, icon: const Icon(Icons.refresh)),
               ],
             ),

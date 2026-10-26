@@ -92,7 +92,7 @@ void main() {
       expect(find.textContaining('Nguyễn An · an@test.vn · 0901234567'), findsOneWidget);
       expect(find.textContaining('VNPAY · mã TXN-777'), findsOneWidget);
       expect(find.textContaining('Không dùng nữa'), findsOneWidget);
-      expect(find.textContaining('DC-12'), findsOneWidget);
+      expect(find.textContaining('không bao giờ vượt quá số tiền khách đã thanh toán'), findsOneWidget);
     });
 
     testWidgets('"Da hoan tien": khong gui duoc khi bo trong ma giao dich, gui gatewayRefundId roi tai lai', (tester) async {

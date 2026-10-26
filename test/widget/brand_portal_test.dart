@@ -85,7 +85,7 @@ void main() {
     backend.on('GET', '/campaigns/brand/b1', (_) => [campaign('A', 'DRAFT')]);
     await start(tester);
 
-    expect(find.textContaining('BR-26'), findsOneWidget);
+    expect(find.textContaining('chưa gửi duyệt được'), findsOneWidget);
     final button = tester.widget<FilledButton>(find.ancestor(of: find.text('Gửi duyệt'), matching: find.byType(FilledButton)));
     expect(button.onPressed, isNull);
   });

@@ -7,6 +7,8 @@ import '../../routes.dart';
 import '../../services/portal_services.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/brand_gate.dart';
+import '../../utils/download/file_download.dart';
+import '../../utils/settlement_csv.dart';
 import '../../widgets/common.dart';
 import '../../widgets/portal_shell.dart';
 import '../../widgets/settlement_tile.dart';
@@ -46,6 +48,17 @@ class _SettlementsState extends State<_Settlements> {
     });
   }
 
+  // FR-SETTLE-07: thuong hieu tai phieu doi soat ra CSV de doi chieu
+  Future<void> _exportCsv() async {
+    try {
+      final items = await _future;
+      final ok = await downloadTextFile('doi-soat-${widget.brand.name}.csv', settlementsToCsv(items));
+      if (mounted) showMessage(context, ok ? 'Đã xuất ${items.length} phiếu ra CSV.' : 'Chỉ xuất được CSV trên trình duyệt.');
+    } catch (e) {
+      if (mounted) showMessage(context, e.toString(), error: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -53,7 +66,10 @@ class _SettlementsState extends State<_Settlements> {
           PageHeader(
             title: 'Phiếu đối soát',
             subtitle: 'Doanh thu sau khi trừ hoa hồng sàn, chốt theo tháng',
-            actions: [IconButton(tooltip: 'Tải lại', onPressed: _reload, icon: const Icon(Icons.refresh))],
+            actions: [
+              OutlinedButton.icon(onPressed: _exportCsv, icon: const Icon(Icons.download), label: const Text('Xuất CSV')),
+              IconButton(tooltip: 'Tải lại', onPressed: _reload, icon: const Icon(Icons.refresh)),
+            ],
           ),
           Expanded(
             child: AsyncBody<List<Settlement>>(

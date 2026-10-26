@@ -112,7 +112,7 @@ class _RefundAdminScreenState extends State<RefundAdminScreen> {
         children: [
           PageHeader(
             title: 'Hàng đợi hoàn tiền',
-            subtitle: 'Tổng tiền hoàn không bao giờ vượt quá số tiền khách đã thanh toán (DC-12), máy chủ luôn kiểm tra lại.',
+            subtitle: 'Tổng tiền hoàn không bao giờ vượt quá số tiền khách đã thanh toán, máy chủ luôn kiểm tra lại.',
             actions: [
               IconButton(
                 tooltip: 'Tải lại',
