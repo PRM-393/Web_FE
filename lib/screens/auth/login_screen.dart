@@ -218,6 +218,13 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         const SizedBox(height: AppSpacing.md),
         Wrap(spacing: 8, children: [TextButton(onPressed: () => AppRoutes.go(context, AppRoutes.resetPassword), child: const Text('Quên mật khẩu?')), TextButton(onPressed: () => AppRoutes.go(context, AppRoutes.activate), child: const Text('Kích hoạt tài khoản'))]),
+        // FR-BRAND-01: doanh nghiep chua co tai khoan vao tu day
+        const Divider(height: AppSpacing.lg),
+        TextButton(
+          key: const Key('login-register-brand'),
+          onPressed: () => AppRoutes.go(context, AppRoutes.registerBrand),
+          child: const Text('Doanh nghiệp muốn bán voucher? Đăng ký tại đây'),
+        ),
         const Text(
  'Khách hàng vui lòng dùng ứng dụng di động để mua và sử dụng voucher.',
           textAlign: TextAlign.left,

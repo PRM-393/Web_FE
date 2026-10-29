@@ -88,6 +88,19 @@ class _CampaignListState extends State<_CampaignList> {
     if (ok) await _run(() => _service.pause(c.id), 'Đã tạm dừng chiến dịch.');
   }
 
+  // FR-CAMP-15: chien dich het thoi gian ban quay ve nhap de sua ngay roi gui duyet lai.
+  // Noi ro se phai gui duyet lai, vi mo lai KHONG dua thang len ban nhu nut "Ban lai" cua PAUSED.
+  Future<void> _reopen(VoucherCampaign c) async {
+    final ok = await confirmDialog(
+      context,
+      title: 'Mở lại "${c.title}"?',
+      message: 'Chiến dịch quay về trạng thái nháp. Hãy sửa lại thời gian bán rồi gửi duyệt lần nữa '
+          'thì chiến dịch mới lên bán được.',
+      confirm: 'Mở lại',
+    );
+    if (ok) await _run(() => _service.reopen(c.id), 'Đã mở lại chiến dịch về nháp. Hãy sửa ngày bán rồi gửi duyệt.');
+  }
+
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -139,6 +152,7 @@ class _CampaignListState extends State<_CampaignList> {
                 () => _service.resume(campaigns[i].id),
                 'Đã mở bán lại chiến dịch.',
               ),
+              onReopen: () => _reopen(campaigns[i]),
             ),
           ),
         ),
@@ -155,6 +169,7 @@ class _CampaignTile extends StatelessWidget {
     required this.onSubmit,
     required this.onPause,
     required this.onResume,
+    required this.onReopen,
   });
 
   final VoucherCampaign campaign;
@@ -163,6 +178,7 @@ class _CampaignTile extends StatelessWidget {
   final VoidCallback onSubmit;
   final VoidCallback onPause;
   final VoidCallback onResume;
+  final VoidCallback onReopen;
 
   @override
   Widget build(BuildContext context) {
@@ -293,6 +309,14 @@ class _CampaignTile extends StatelessWidget {
                     onPressed: onResume,
                     icon: const Icon(Icons.play_arrow),
                     label: const Text('Bán lại'),
+                  ),
+                // FR-CAMP-15: ENDED truoc day la het duong quay lai, phai tao chien dich moi tu dau
+                if (c.canReopen)
+                  OutlinedButton.icon(
+                    key: const Key('campaign-reopen'),
+                    onPressed: onReopen,
+                    icon: const Icon(Icons.restart_alt),
+                    label: const Text('Mở lại'),
                   ),
               ],
             ),

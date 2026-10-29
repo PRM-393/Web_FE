@@ -8,6 +8,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/format.dart';
 import '../../utils/download/file_download.dart';
 import '../../utils/settlement_csv.dart';
+import '../../utils/validators.dart';
 import '../../widgets/common.dart';
 import '../../widgets/portal_shell.dart';
 import '../../widgets/settlement_tile.dart';
@@ -70,11 +71,17 @@ class _SettlementAdminScreenState extends State<SettlementAdminScreen> {
     });
   }
 
+  // FR-SETTLE-07: may chu bat buoc CA ngay chuyen lan ma giao dich nen hop thoai phai hoi du hai.
+  // Truoc day chi hoi ma giao dich va ngay bi gan cung bang thoi diem bam nut, khong khai duoc
+  // lenh chuyen da thuc hien tu hom truoc.
   Future<void> _markPaid(Settlement s) async {
-    final ref = await promptTextDialog(context, title: 'Đánh dấu đã chi trả', label: 'Mã giao dịch ngân hàng');
-    if (ref == null) return;
+    final result = await showDialog<({String bankTxnRef, DateTime paidAt})>(
+      context: context,
+      builder: (_) => _MarkPaidDialog(settlement: s),
+    );
+    if (result == null) return;
     await _guard(() async {
-      await _service.markSettlementPaid(s.id, ref);
+      await _service.markSettlementPaid(s.id, result.bankTxnRef, result.paidAt);
       if (!mounted) return;
       showMessage(context, 'Đã ghi nhận chi trả.');
       _reload();
@@ -123,6 +130,7 @@ class _SettlementAdminScreenState extends State<SettlementAdminScreen> {
                   itemBuilder: (context, i) => SettlementTile(
                     settlement: list[i],
                     showBrand: true,
+                    onTap: () => AppRoutes.go(context, AppRoutes.adminSettlementDetail, arguments: list[i].id),
                     trailing: list[i].isPaid
                         ? null
                         : OutlinedButton.icon(
@@ -136,5 +144,90 @@ class _SettlementAdminScreenState extends State<SettlementAdminScreen> {
             ),
           ],
         ),
+      );
+}
+
+// FR-SETTLE-07: ghi nhan chi tra - bat buoc ngay chuyen + ma giao dich ngan hang.
+// Ngay mac dinh la hom nay theo lich Viet Nam, khong cho chon ngay o tuong lai (may chu cung chan).
+class _MarkPaidDialog extends StatefulWidget {
+  const _MarkPaidDialog({required this.settlement});
+
+  final Settlement settlement;
+
+  @override
+  State<_MarkPaidDialog> createState() => _MarkPaidDialogState();
+}
+
+class _MarkPaidDialogState extends State<_MarkPaidDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _ref = TextEditingController();
+  late DateTime _paidAt = vnCalendarDay(DateTime.now());
+
+  @override
+  void dispose() {
+    _ref.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final today = vnCalendarDay(DateTime.now());
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _paidAt,
+      firstDate: vnCalendarDay(widget.settlement.periodStart),
+      lastDate: today,
+    );
+    if (picked != null) setState(() => _paidAt = picked);
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    // Gui dau ngay theo gio VN quy ve UTC - may chu chi dung de ghi nhan, khong so sanh gio phut
+    Navigator.pop(context, (bankTxnRef: _ref.text.trim(), paidAt: vnStartOfDayUtc(_paidAt)));
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Đánh dấu đã chi trả'),
+        content: SizedBox(
+          width: 420,
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '${widget.settlement.brandName ?? widget.settlement.brandId} · '
+                  'thực nhận ${formatVnd(widget.settlement.payableAmount)}',
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextFormField(
+                  key: const Key('mark-paid-ref'),
+                  controller: _ref,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: 'Mã giao dịch ngân hàng *'),
+                  validator: validateBankTxnRef,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                OutlinedButton.icon(
+                  key: const Key('mark-paid-date'),
+                  onPressed: _pickDate,
+                  icon: const Icon(Icons.event),
+                  label: Text('Ngày chuyển: ${_paidAt.day}/${_paidAt.month}/${_paidAt.year}'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
+          FilledButton(
+            key: const Key('mark-paid-submit'),
+            style: FilledButton.styleFrom(minimumSize: const Size(96, 40)),
+            onPressed: _submit,
+            child: const Text('Xác nhận'),
+          ),
+        ],
       );
 }

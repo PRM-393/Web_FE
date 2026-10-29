@@ -128,3 +128,25 @@ String? validateCampaignRules({
   if (storeCount == 0) return 'Chọn ít nhất một chi nhánh áp dụng';
   return null;
 }
+
+// UC-04 luong 3a / UC-06: may chu doi ly do tu choi it nhat 10 ky tu (RejectCampaignDto, RejectBrandDto).
+// Kiem o day de nguoi dung thay loi ngay duoi o nhap thay vi doi may chu tra 400.
+const minRejectReasonLength = 10;
+
+String? validateRejectReason(String? value) {
+  final text = value?.trim() ?? '';
+  if (text.isEmpty) return 'Vui lòng nhập lý do để bên kia biết phải sửa gì';
+  if (text.length < minRejectReasonLength) {
+    return 'Lý do cần ít nhất $minRejectReasonLength ký tự';
+  }
+  if (text.length > 500) return 'Lý do tối đa 500 ký tự';
+  return null;
+}
+
+// FR-SETTLE-07: ma giao dich ngan hang cua lenh chuyen, bat buoc
+String? validateBankTxnRef(String? value) {
+  final text = value?.trim() ?? '';
+  if (text.isEmpty) return 'Vui lòng nhập mã giao dịch ngân hàng';
+  if (text.length > 100) return 'Mã giao dịch tối đa 100 ký tự';
+  return null;
+}

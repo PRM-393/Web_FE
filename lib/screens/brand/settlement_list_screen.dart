@@ -81,7 +81,11 @@ class _SettlementsState extends State<_Settlements> {
                 padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
                 itemCount: list.length,
                 separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-                itemBuilder: (context, i) => SettlementTile(settlement: list[i]),
+                itemBuilder: (context, i) => SettlementTile(
+                  settlement: list[i],
+                  // FR-SETTLE-08: mo chi tiet tung dong voucher de doi chieu voi sao ke
+                  onTap: () => AppRoutes.go(context, AppRoutes.brandSettlementDetail, arguments: list[i].id),
+                ),
               ),
             ),
           ),
