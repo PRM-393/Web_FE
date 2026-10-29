@@ -97,6 +97,10 @@ class VoucherCampaign {
   bool get canPause => status == CampaignStatus.published;
   bool get canResume => status == CampaignStatus.paused;
 
+  // FR-CAMP-15: chien dich het thoi gian ban duoc mo lai ve nhap de sua ngay roi gui duyet lai.
+  // Khong co loi nay thi ENDED la het duong quay lai, phai tao chien dich moi tu dau.
+  bool get canReopen => status == CampaignStatus.ended;
+
   factory VoucherCampaign.fromJson(Map<String, dynamic> json) => VoucherCampaign(
         id: json['id'] as String,
         brandId: json['brandId'] as String? ?? '',
@@ -184,4 +188,29 @@ class CampaignDraft {
         if (maxDiscount != null) 'maxDiscount': maxDiscount,
         if (comboItems != null && comboItems!.isNotEmpty) 'comboItems': comboItems,
       };
+}
+
+// FR-CAMP-11: ton kho con lai theo thoi gian thuc (GET /campaigns/:id/stock).
+// Tach khoi VoucherCampaign vi day la so doc lai lien tuc, khong phai thong tin cau hinh chien dich.
+class CampaignStock {
+  const CampaignStock({
+    required this.totalQuantity,
+    required this.soldQuantity,
+    required this.reservedQuantity,
+    required this.available,
+  });
+
+  final int totalQuantity;
+  final int soldQuantity;
+  final int reservedQuantity;
+
+  // DC-03: totalQuantity - soldQuantity - reservedQuantity
+  final int available;
+
+  factory CampaignStock.fromJson(Map<String, dynamic> json) => CampaignStock(
+        totalQuantity: asInt(json['totalQuantity']),
+        soldQuantity: asInt(json['soldQuantity']),
+        reservedQuantity: asInt(json['reservedQuantity']),
+        available: asInt(json['available'] ?? json['remaining']),
+      );
 }

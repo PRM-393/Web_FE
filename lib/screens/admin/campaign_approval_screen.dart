@@ -6,6 +6,7 @@ import '../../routes.dart';
 import '../../services/portal_services.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/format.dart';
+import '../../utils/validators.dart';
 import '../../widgets/common.dart';
 import '../../widgets/portal_shell.dart';
 
@@ -45,8 +46,18 @@ class _CampaignApprovalScreenState extends State<CampaignApprovalScreen> {
     }
   }
 
+  // UC-04 luong 3a: ly do bat buoc va phai du y nghia - may chu doi it nhat 10 ky tu.
+  // Kiem ngay tren hop thoai de quan tri vien khong bam "Tu choi" roi moi nhan loi 400.
   Future<void> _reject(VoucherCampaign c) async {
-    final reason = await promptTextDialog(context, title: 'Từ chối "${c.title}"', label: 'Lý do từ chối', confirm: 'Từ chối');
+    final reason = await promptTextDialog(
+      context,
+      title: 'Từ chối "${c.title}"',
+      label: 'Lý do từ chối',
+      confirm: 'Từ chối',
+      maxLines: 3,
+      message: 'Lý do được gửi lại cho thương hiệu kèm chiến dịch về nháp, hãy nêu rõ cần sửa gì.',
+      validator: validateRejectReason,
+    );
     if (reason != null) await _run(() => _service.rejectCampaign(c.id, reason), 'Đã từ chối chiến dịch.');
   }
 

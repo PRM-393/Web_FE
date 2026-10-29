@@ -38,6 +38,38 @@ class BrandService {
     return Brand.fromJson(json as Map<String, dynamic>);
   }
 
+  // FR-BRAND-01/02: dang ky khi CHUA co tai khoan. Khac `register()` o tren: ham do goi POST /brands,
+  // chi dung duoc khi da dang nhap bang vai tro BrandOwner. Ham nay la cua vao cong khai, may chu tao
+  // tai khoan PENDING_ACTIVATION roi gui lien ket dat mat khau.
+  Future<BrandRegistration> registerPublic({
+    required String ownerEmail,
+    required String ownerFullName,
+    required String name,
+    String? ownerPhone,
+    String? description,
+    String? contactInfo,
+    String? bankInfo,
+  }) async {
+    final json = await _api.post(
+      '/brands/register',
+      body: {
+        'ownerEmail': ownerEmail.trim(),
+        'ownerFullName': ownerFullName.trim(),
+        'name': name.trim(),
+        'ownerPhone': ?_blankToNull(ownerPhone),
+        'description': ?_blankToNull(description),
+        'contactInfo': ?_blankToNull(contactInfo),
+        'bankInfo': ?_blankToNull(bankInfo),
+      },
+    );
+    return BrandRegistration.fromJson(json as Map<String, dynamic>);
+  }
+
+  static String? _blankToNull(String? value) {
+    final trimmed = value?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
+  }
+
   Future<List<Store>> stores(String brandId) async =>
       asList(await _api.get('/brands/$brandId/stores'), Store.fromJson);
 
@@ -116,6 +148,11 @@ class BrandService {
     await _api.get('/brands/$brandId/settlements'),
     Settlement.fromJson,
   );
+
+  // FR-SETTLE-08: chi tiet phieu kem tung dong voucher. May chu chi tra phieu cua chinh thuong hieu
+  // dang dang nhap (BrandResourceGuard), nen khong can loc them o day.
+  Future<SettlementDetail> settlementDetail(String id) async =>
+      SettlementDetail.fromJson(await _api.get('/settlements/$id') as Map<String, dynamic>);
 }
 
 // Chien dich voucher cua thuong hieu - FR-CAMP-*
@@ -140,6 +177,14 @@ class CampaignService {
   Future<void> pause(String id) => _api.patch('/campaigns/$id/pause');
 
   Future<void> resume(String id) => _api.patch('/campaigns/$id/resume');
+
+  // FR-CAMP-15: mo lai chien dich da ket thuc -> may chu dua ve DRAFT de sua ngay ban roi gui duyet lai
+  Future<void> reopen(String id) => _api.patch('/campaigns/$id/reopen');
+
+  // FR-CAMP-11: ton kho con lai theo thoi gian thuc, doc lai rieng mot chien dich
+  // ma khong phai tai lai ca danh sach
+  Future<CampaignStock> stock(String id) async =>
+      CampaignStock.fromJson(await _api.get('/campaigns/$id/stock') as Map<String, dynamic>);
 }
 
 // Xac nhan su dung voucher tai cua hang - FR-REDEEM-05..10, FR-AUTH-12
@@ -257,10 +302,15 @@ class AdminService {
     return json is List ? json.length : 0;
   }
 
-  Future<void> markSettlementPaid(String id, String bankTxnRef) => _api.patch(
+  // FR-SETTLE-07: may chu bat buoc CA ngay chuyen lan ma giao dich, va tu choi ngay o tuong lai.
+  // paidAt gui theo UTC; man hinh cho chon ngay theo lich Viet Nam.
+  Future<void> markSettlementPaid(String id, String bankTxnRef, DateTime paidAt) => _api.patch(
     '/admin/settlements/$id/mark-paid',
-    body: {'bankTxnRef': bankTxnRef},
+    body: {'bankTxnRef': bankTxnRef.trim(), 'paidAt': paidAt.toUtc().toIso8601String()},
   );
+
+  Future<SettlementDetail> settlementDetail(String id) async =>
+      SettlementDetail.fromJson(await _api.get('/settlements/$id') as Map<String, dynamic>);
 
   // UC-07: hang doi hoan tien thu cong (cong thanh toan khong hoan tu dong duoc)
   Future<List<RefundRequest>> manualPendingRefunds() async =>

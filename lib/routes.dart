@@ -11,7 +11,9 @@ import 'screens/admin/commission_config_screen.dart';
 import 'screens/admin/refund_admin_screen.dart';
 import 'screens/admin/review_moderation_screen.dart';
 import 'screens/admin/settlement_admin_screen.dart';
+import 'screens/auth/brand_register_screen.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/shared/settlement_detail_screen.dart';
 import 'screens/brand/brand_profile_screen.dart';
 import 'screens/brand/campaign_form_screen.dart';
 import 'screens/brand/campaign_list_screen.dart';
@@ -35,6 +37,9 @@ class AppRoutes {
   static const login = '/login';
   static const activate = '/activate';
   static const resetPassword = '/reset-password';
+
+  // FR-BRAND-01: cua vao cong khai cho doanh nghiep chua co tai khoan
+  static const registerBrand = '/register-brand';
   static const adminCategories = '/admin/categories';
   static const forbidden = '/forbidden';
 
@@ -44,6 +49,7 @@ class AppRoutes {
   static const brandStaff = '/brand/staff';
   static const brandReviews = '/brand/reviews';
   static const brandSettlements = '/brand/settlements';
+  static const brandSettlementDetail = '/brand/settlement-detail';
   static const brandReports = '/brand/reports';
   static const brandProfile = '/brand/profile';
 
@@ -55,6 +61,7 @@ class AppRoutes {
   static const adminBrands = '/admin/brands';
   static const adminCampaigns = '/admin/campaigns';
   static const adminSettlements = '/admin/settlements';
+  static const adminSettlementDetail = '/admin/settlement-detail';
   static const adminCommission = '/admin/commission';
   static const adminRefunds = '/admin/refunds';
   static const adminReviews = '/admin/reviews';
@@ -86,6 +93,9 @@ class AppRoutes {
     final Widget page;
     if (name == activate || name == resetPassword) {
       page = AccountRecoveryScreen(activation: name == activate, email: uri.queryParameters['email'] ?? '', token: uri.queryParameters['token']);
+    } else if (name == registerBrand) {
+      // FR-BRAND-01: doanh nghiep chua co tai khoan; da dang nhap roi thi ve trang chu cua vai tro
+      page = auth.isLoggedIn ? _pageFor(homeOf(auth.role), null) : const BrandRegisterScreen();
     } else if (name == root) {
       page = auth.isLoggedIn ? _pageFor(homeOf(auth.role), null) : const LoginScreen();
     } else if (name == login) {
@@ -116,6 +126,9 @@ class AppRoutes {
         brandStaff => const StaffListScreen(),
         brandReviews => const ReviewListScreen(),
         brandSettlements => const SettlementListScreen(),
+        // Cung mot man cho ca hai portal; may chu chan thuong hieu xem phieu cua nguoi khac
+        brandSettlementDetail => SettlementDetailScreen(settlementId: args as String? ?? '', adminView: false),
+        adminSettlementDetail => SettlementDetailScreen(settlementId: args as String? ?? '', adminView: true),
         brandReports => const ReportScreen(),
         brandProfile => const BrandProfileScreen(),
         storeSelect => const StoreSelectScreen(),

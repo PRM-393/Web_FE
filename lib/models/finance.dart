@@ -48,6 +48,50 @@ class Settlement {
   );
 }
 
+// Mot dong trong phieu doi soat: ung voi dung mot voucher da ban (DC-06).
+// Ty le hoa hong lay theo tung dong vi don cu giu ty le da chot luc thanh toan (BR-09).
+class SettlementLine {
+  const SettlementLine({
+    required this.id,
+    required this.voucherItemId,
+    required this.amount,
+    required this.commissionRate,
+    required this.commissionAmount,
+    this.orderId,
+  });
+
+  final String id;
+  final String voucherItemId;
+  final String? orderId;
+  final int amount;
+  final double commissionRate;
+  final int commissionAmount;
+
+  int get payableAmount => amount - commissionAmount;
+
+  factory SettlementLine.fromJson(Map<String, dynamic> json) => SettlementLine(
+    id: json['id'] as String? ?? '',
+    voucherItemId: json['voucherItemId'] as String? ?? '',
+    orderId: json['orderId'] as String?,
+    amount: asInt(json['amount']),
+    commissionRate: asDouble(json['commissionRate']),
+    commissionAmount: asInt(json['commissionAmount']),
+  );
+}
+
+// GET /settlements/:id tra ve { settlement, items } (FR-SETTLE-08)
+class SettlementDetail {
+  const SettlementDetail({required this.settlement, required this.items});
+
+  final Settlement settlement;
+  final List<SettlementLine> items;
+
+  factory SettlementDetail.fromJson(Map<String, dynamic> json) => SettlementDetail(
+    settlement: Settlement.fromJson(json['settlement'] as Map<String, dynamic>),
+    items: asList(json['items'], SettlementLine.fromJson),
+  );
+}
+
 // Ty le hoa hong chung cua san + lan thay doi gan nhat (FR-SETTLE-01, NFR-SEC-07)
 class CommissionRateInfo {
   const CommissionRateInfo({required this.rate, this.isDefault = false, this.updatedBy, this.updatedAt});

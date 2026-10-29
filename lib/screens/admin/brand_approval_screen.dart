@@ -5,6 +5,7 @@ import '../../models/brand.dart';
 import '../../routes.dart';
 import '../../services/portal_services.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/validators.dart';
 import '../../widgets/common.dart';
 import '../../widgets/portal_shell.dart';
 
@@ -45,8 +46,17 @@ class _BrandApprovalScreenState extends State<BrandApprovalScreen> {
     _reload();
   }
 
+  // FR-BRAND-09: ly do dinh chi duoc gui vao email cho chu thuong hieu, may chu doi it nhat 10 ky tu
   Future<void> _suspend(Brand b) async {
-    final reason = await promptTextDialog(context, title: 'Đình chỉ "${b.name}"', label: 'Lý do đình chỉ', confirm: 'Đình chỉ');
+    final reason = await promptTextDialog(
+      context,
+      title: 'Đình chỉ "${b.name}"',
+      label: 'Lý do đình chỉ',
+      confirm: 'Đình chỉ',
+      maxLines: 3,
+      message: 'Chiến dịch đang bán sẽ chuyển tạm dừng. Voucher khách đã mua vẫn dùng được bình thường.',
+      validator: validateRejectReason,
+    );
     if (reason != null) {
       await _run(() => _service.suspendBrand(b.id, reason), 'Đã đình chỉ "${b.name}". Các chiến dịch đang bán đã tạm dừng.');
     }
@@ -63,8 +73,17 @@ class _BrandApprovalScreenState extends State<BrandApprovalScreen> {
     }
   }
 
+  // UC-06 luong 3a: ly do tu choi di kem email gui cho chu thuong hieu nen rong la vo nghia
   Future<void> _reject(Brand b) async {
-    final reason = await promptTextDialog(context, title: 'Từ chối "${b.name}"', label: 'Lý do từ chối', confirm: 'Từ chối');
+    final reason = await promptTextDialog(
+      context,
+      title: 'Từ chối "${b.name}"',
+      label: 'Lý do từ chối',
+      confirm: 'Từ chối',
+      maxLines: 3,
+      message: 'Lý do được gửi qua email cho chủ thương hiệu, hãy nêu rõ cần bổ sung gì.',
+      validator: validateRejectReason,
+    );
     if (reason != null) await _run(() => _service.rejectBrand(b.id, reason), 'Đã từ chối hồ sơ.');
   }
 
