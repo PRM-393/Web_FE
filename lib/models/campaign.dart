@@ -19,12 +19,10 @@ class VoucherType {
 
   static const discount = 'DISCOUNT';
   static const prepaid = 'PREPAID';
-  static const combo = 'COMBO';
 
   static const labels = {
     discount: 'Mã giảm giá',
     prepaid: 'Voucher mệnh giá trả trước',
-    combo: 'Combo / gói dịch vụ',
   };
 }
 
@@ -101,7 +99,8 @@ class VoucherCampaign {
         id: json['id'] as String,
         brandId: json['brandId'] as String? ?? '',
         title: json['title'] as String? ?? '',
-        voucherType: json['voucherType'] as String? ?? VoucherType.discount,
+        // Du lieu COMBO cu duoc hien thi nhu voucher tra truoc; form moi chi cho phep 2 loai.
+        voucherType: json['voucherType'] == VoucherType.discount ? VoucherType.discount : VoucherType.prepaid,
         salePrice: asDouble(json['salePrice']),
         faceValue: asDouble(json['faceValue']),
         totalQuantity: asInt(json['totalQuantity']),
@@ -182,6 +181,5 @@ class CampaignDraft {
         if (discountType != null) 'discountType': discountType,
         if (discountValue != null) 'discountValue': discountValue,
         if (maxDiscount != null) 'maxDiscount': maxDiscount,
-        if (comboItems != null && comboItems!.isNotEmpty) 'comboItems': comboItems,
       };
 }

@@ -106,10 +106,10 @@ String? validateCampaignRules({
   String? comboItems,
 }) {
   if (salePrice <= 0) return 'Giá bán phải lớn hơn 0';
-  if (voucherType == 'PREPAID' && faceValue <= salePrice) {
-    return 'Voucher mệnh giá phải có giá trị lớn hơn giá bán';
+  if (salePrice >= faceValue) return 'Giá bán phải nhỏ hơn giá trị voucher';
+  if (voucherType != null && voucherType != 'DISCOUNT' && voucherType != 'PREPAID') {
+    return 'Loại voucher chỉ có thể là Mã giảm giá hoặc Voucher mệnh giá trả trước';
   }
-  if (salePrice > faceValue) return 'Giá bán không được lớn hơn giá trị voucher';
   if (voucherType == 'DISCOUNT') {
     if (discountType == null || discountValue == null || discountValue <= 0) {
       return 'Mã giảm giá cần chọn kiểu giảm và nhập giá trị giảm';
@@ -117,9 +117,6 @@ String? validateCampaignRules({
     if (discountType == 'PERCENT' && (discountValue > 100 || maxDiscount == null || maxDiscount <= 0)) {
       return 'Giảm theo phần trăm cần giá trị từ 1 đến 100 và mức giảm tối đa';
     }
-  }
-  if (voucherType == 'COMBO' && (comboItems == null || comboItems.trim().isEmpty)) {
-    return 'Combo cần mô tả nội dung gói';
   }
   if (!saleStartAt.isBefore(saleEndAt)) return 'Ngày kết thúc bán phải sau ngày bắt đầu bán';
   if (voucherExpireAt.isBefore(saleEndAt.add(minExpireAfterSaleEnd))) {

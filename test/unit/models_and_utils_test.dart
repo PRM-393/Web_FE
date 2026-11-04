@@ -208,7 +208,7 @@ void main() {
     test('CampaignDraft gui thoi gian UTC va bo storeIds khi sua', () {
       final draft = CampaignDraft(
         title: 'A',
-        voucherType: VoucherType.combo,
+        voucherType: VoucherType.prepaid,
         salePrice: 1,
         faceValue: 2,
         totalQuantity: 3,
@@ -342,10 +342,11 @@ void main() {
           );
 
       test('PREPAID: gia tri phai lon hon gia ban', () {
-        expect(check('PREPAID', sale: 100000, face: 100000), contains('mệnh giá'));
+        expect(check('PREPAID', sale: 100000, face: 100000), contains('nhỏ hơn giá trị voucher'));
         expect(check('PREPAID'), isNull);
       });
       test('DISCOUNT: bat buoc kieu giam va gia tri', () {
+        expect(check('DISCOUNT', sale: 100000, face: 100000), contains('nhỏ hơn giá trị voucher'));
         expect(check('DISCOUNT'), contains('kiểu giảm'));
         expect(check('DISCOUNT', dt: 'AMOUNT', dv: 20000), isNull);
       });
@@ -354,9 +355,8 @@ void main() {
         expect(check('DISCOUNT', dt: 'PERCENT', dv: 120, max: 10000), contains('1 đến 100'));
         expect(check('DISCOUNT', dt: 'PERCENT', dv: 20, max: 15000), isNull);
       });
-      test('COMBO: bat buoc mo ta goi', () {
-        expect(check('COMBO'), contains('Combo'));
-        expect(check('COMBO', combo: '1 banh mi + 1 ca phe'), isNull);
+      test('COMBO: khong con duoc ho tro', () {
+        expect(check('COMBO'), contains('chỉ có thể'));
       });
     });
   });
