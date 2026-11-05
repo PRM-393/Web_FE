@@ -30,7 +30,7 @@ Map<String, dynamic> mismatchOrder(String id) => {
   'id': id,
   'userId': 'u1',
   'campaignId': 'c1',
-  'campaignTitle': 'Combo trưa',
+  'campaignTitle': 'Voucher trưa',
   'customer': {'id': 'u1', 'email': 'binh@test.vn', 'fullName': 'Trần Bình', 'phone': null},
   'quantity': 2,
   'unitPrice': '50000',
@@ -67,6 +67,18 @@ void main() {
     backend.on('GET', '/admin/dashboard', (_) => {});
     backend.on('GET', '/refunds/manual-pending', (_) => [manualRefund('r1')]);
     backend.on('GET', '/admin/payment-mismatches', (_) => [mismatchOrder('o1')]);
+    backend.on('GET', '/refunds/pending-payments', (_) => [
+      {
+        'id': 'pp1',
+        'amount': 160000,
+        'reasonType': 'OVERSOLD',
+        'createdAt': '2026-11-01T03:00:00.000Z',
+        'orderId': 'o9',
+        'campaignTitle': 'Voucher đã hết',
+        'gatewayTxnId': 'PAYOS-FT9',
+        'customer': {'id': 'u9', 'email': 'khach9@vidu.com'},
+      },
+    ]);
   });
 
   Future<void> openAdmin(WidgetTester tester, String route) async {
@@ -156,13 +168,28 @@ void main() {
       expect(find.text('Số tiền hoàn vượt giao dịch đã nhận.'), findsOneWidget);
     });
 
+    testWidgets('tab "Het hang / tra trung": hien khoan tien, xac nhan bat buoc ma giao dich', (tester) async {
+      backend.on('PATCH', '/refunds/pending-payments/pp1/confirm', (_) => {'message': 'ok'});
+      await openAdmin(tester, AppRoutes.adminRefunds);
+      await tester.tap(find.text('Hết hàng / trả trùng'));
+      await tester.pumpAndSettle();
+      expect(find.text('Voucher đã hết'), findsOneWidget);
+      expect(find.textContaining('voucher đã hết hàng'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('payment-refund-confirm-pp1')));
+      await tester.pumpAndSettle();
+      await tester.enterText(inDialog(find.byType(TextFormField)), 'NH-9');
+      await tester.tap(inDialog(find.widgetWithText(FilledButton, 'Xác nhận')));
+      await tester.pumpAndSettle();
+      expect(backend.bodyOf('PATCH', '/refunds/pending-payments/pp1/confirm'), {'gatewayRefundId': 'NH-9'});
+    });
+
     testWidgets('tab "Don lech so tien": so tien phai tra va da nhan, xac nhan bat buoc ma giao dich', (tester) async {
       backend.on('PATCH', '/admin/payment-mismatches/o1/confirm-refund', (_) => {'message': 'ok', 'paymentRefundId': 'pr1'});
       await openAdmin(tester, AppRoutes.adminRefunds);
 
       await tester.tap(find.text('Đơn lệch số tiền'));
       await tester.pumpAndSettle();
-      expect(find.text('Combo trưa'), findsOneWidget);
+      expect(find.text('Voucher trưa'), findsOneWidget);
       expect(find.textContaining('Trần Bình · binh@test.vn'), findsOneWidget);
       expect(find.textContaining('100.000'), findsOneWidget, reason: 'so tien phai tra');
       expect(find.textContaining('120.000'), findsWidgets, reason: 'so tien da nhan');

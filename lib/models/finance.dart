@@ -254,6 +254,42 @@ class MismatchPayment {
 }
 
 // Don hang co so tien nhan duoc khac so tien phai tra (PAYMENT_MISMATCH) - UC-07
+// BR-11 / DC-11: tien khach da tra nhung don khong phat hanh duoc voucher (het hang, tra trung), cho hoan tay
+class PendingPaymentRefund {
+  const PendingPaymentRefund({
+    required this.id,
+    required this.amount,
+    required this.reasonType,
+    required this.createdAt,
+    this.orderId,
+    this.campaignTitle,
+    this.gatewayTxnId,
+    this.customer,
+  });
+
+  final String id;
+  final int amount;
+  final String reasonType;
+  final DateTime createdAt;
+  final String? orderId;
+  final String? campaignTitle;
+  final String? gatewayTxnId;
+  final CustomerInfo? customer;
+
+  String get reasonLabel => reasonType == 'OVERSOLD' ? 'Tiền đến khi voucher đã hết hàng' : 'Khách thanh toán trùng';
+
+  factory PendingPaymentRefund.fromJson(Map<String, dynamic> json) => PendingPaymentRefund(
+    id: json['id'] as String,
+    amount: asInt(json['amount']),
+    reasonType: json['reasonType'] as String? ?? 'OVERSOLD',
+    createdAt: asDate(json['createdAt']),
+    orderId: json['orderId'] as String?,
+    campaignTitle: json['campaignTitle'] as String?,
+    gatewayTxnId: json['gatewayTxnId'] as String?,
+    customer: CustomerInfo.fromJsonOrNull(json['customer']),
+  );
+}
+
 class PaymentMismatchOrder {
   const PaymentMismatchOrder({
     required this.id,
