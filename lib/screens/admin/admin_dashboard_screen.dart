@@ -73,14 +73,39 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     subtitle: 'Theo dõi hiệu quả toàn sàn và những giao dịch tạo nên giá trị.',
                   ),
                   StatCard(
-                    label: 'Doanh thu sau hoàn tiền',
-                    value: formatVnd(d.totalRevenue),
+                    label: 'Tổng giá trị giao dịch (GMV)',
+                    value: formatVnd(d.grossRevenue),
                     icon: Icons.payments_outlined,
                   ),
                   StatCard(
-                    label: 'Tổng hoa hồng',
+                    label: 'Hoàn tiền cho khách',
+                    value: formatVnd(d.refundedAmount),
+                    icon: Icons.currency_exchange,
+                  ),
+                  StatCard(
+                    label: 'Doanh thu thuần',
+                    value: formatVnd(d.totalRevenue),
+                    icon: Icons.account_balance_wallet_outlined,
+                  ),
+                  StatCard(
+                    label: 'Doanh thu hoa hồng',
                     value: formatVnd(d.totalCommission),
                     icon: Icons.percent,
+                  ),
+                  StatCard(
+                    label: 'Phải trả thương hiệu',
+                    value: formatVnd(d.brandPayable),
+                    icon: Icons.request_quote_outlined,
+                  ),
+                  StatCard(
+                    label: 'Đã thanh toán thương hiệu',
+                    value: formatVnd(d.brandPaid),
+                    icon: Icons.task_alt,
+                  ),
+                  StatCard(
+                    label: 'Còn phải trả thương hiệu',
+                    value: formatVnd(d.brandUnpaid),
+                    icon: Icons.pending_actions,
                   ),
                   StatCard(
                     label: 'Thương hiệu hoạt động',
@@ -92,10 +117,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     value: '${d.totalTransactions}',
                     icon: Icons.receipt_long_outlined,
                   ),
-                  StatCard(
-                    label: 'Đã hoàn tiền',
-                    value: formatVnd(d.refundedAmount),
-                    icon: Icons.currency_exchange,
+                  const SizedBox(
+                    width: double.infinity,
+                    child: Text(
+                      'Doanh thu thuần = GMV − Hoàn tiền. Phải trả thương hiệu = Doanh thu thuần − Doanh thu hoa hồng.',
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    ),
                   ),
                   SizedBox(
                     width: double.infinity,
@@ -106,7 +133,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Doanh thu theo ngày · Giờ Việt Nam',
+                              'Doanh thu thuần theo ngày · Giờ Việt Nam',
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
                             const SizedBox(height: 16),

@@ -61,6 +61,33 @@ void main() {
     expect(find.text('Chờ duyệt'), findsOneWidget);
   });
 
+  testWidgets('xoa chien dich chua co don: xac nhan roi goi DELETE', (tester) async {
+    stubBrand();
+    backend.on('GET', '/campaigns/brand/b1', (_) => [{...campaign('A', 'DRAFT'), 'soldQuantity': 0, 'reservedQuantity': 0}]);
+    backend.on('DELETE', '/campaigns/A', (_) => {'message': 'ok'});
+    await start(tester);
+    await tester.tap(find.byKey(const Key('campaign-delete-A')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Xóa vĩnh viễn'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Xóa'));
+    await tester.pumpAndSettle();
+    expect(backend.called('DELETE', '/campaigns/A'), isTrue);
+  });
+
+  testWidgets('cho duyet: rut ve nhap, khong co nut sua va xoa', (tester) async {
+    stubBrand();
+    backend.on('GET', '/campaigns/brand/b1', (_) => [campaign('A', 'PENDING')]);
+    backend.on('PATCH', '/campaigns/A/withdraw', (_) => campaign('A', 'DRAFT'));
+    await start(tester);
+    expect(find.text('Sửa'), findsNothing);
+    expect(find.byKey(const Key('campaign-delete-A')), findsNothing);
+    await tester.tap(find.byKey(const Key('campaign-withdraw-A')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Rút về nháp'));
+    await tester.pumpAndSettle();
+    expect(backend.called('PATCH', '/campaigns/A/withdraw'), isTrue);
+  });
+
   testWidgets('danh sach chien dich: nut theo trang thai, gui duyet goi API (FR-CAMP-06/08)', (tester) async {
     stubBrand();
     backend.on('GET', '/campaigns/brand/b1', (_) => [campaign('A', 'DRAFT'), campaign('B', 'PUBLISHED')]);
@@ -70,7 +97,8 @@ void main() {
     expect(find.text('Chiến dịch A'), findsOneWidget);
     expect(find.text('Nháp'), findsOneWidget);
     expect(find.text('Đang bán'), findsOneWidget);
-    expect(find.text('Sửa'), findsOneWidget);
+    // Chien dich da dang ban cung sua duoc (se phai duyet lai)
+    expect(find.text('Sửa'), findsNWidgets(2));
     expect(find.text('Tạm dừng'), findsOneWidget);
 
     await tester.tap(find.text('Gửi duyệt').first);
@@ -82,7 +110,7 @@ void main() {
 
   testWidgets('thuong hieu chua duoc duyet thi khong gui duyet duoc (BR-26)', (tester) async {
     stubBrand(status: 'PENDING');
-    backend.on('GET', '/campaigns/brand/b1', (_) => [campaign('A', 'DRAFT')]);
+    backend.on('GET', '/campaigns/brand/b1', (_) => [{...campaign('A', 'DRAFT'), 'soldQuantity': 0, 'reservedQuantity': 0}]);
     await start(tester);
 
     expect(find.textContaining('chưa gửi duyệt được'), findsOneWidget);

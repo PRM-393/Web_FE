@@ -16,6 +16,34 @@ class BrandService {
   Future<List<Brand>> myBrands() async =>
       asList(await _api.get('/brands/me'), Brand.fromJson);
 
+  // FR-BRAND-01/02: dang ky khi CHUA co tai khoan (cong khai); may chu gui lien ket dat mat khau qua email
+  Future<BrandRegistration> registerPublic({
+    required String ownerEmail,
+    required String ownerFullName,
+    required String name,
+    String? ownerPhone,
+    String? description,
+    String? contactInfo,
+    String? bankInfo,
+  }) async {
+    final optional = {
+      'ownerPhone': ownerPhone,
+      'description': description,
+      'contactInfo': contactInfo,
+      'bankInfo': bankInfo,
+    }..removeWhere((_, v) => v == null || v.trim().isEmpty);
+    final json = await _api.post(
+      '/brands/register',
+      body: {
+        'ownerEmail': ownerEmail.trim(),
+        'ownerFullName': ownerFullName.trim(),
+        'name': name.trim(),
+        for (final e in optional.entries) e.key: e.value!.trim(),
+      },
+    );
+    return BrandRegistration.fromJson(json as Map<String, dynamic>);
+  }
+
   Future<Brand> register({
     required String name,
     String? description,
@@ -136,6 +164,10 @@ class CampaignService {
       _api.patch('/campaigns/$id', body: draft.toJson(includeStores: false));
 
   Future<void> submit(String id) => _api.patch('/campaigns/$id/submit');
+
+  Future<void> withdraw(String id) => _api.patch('/campaigns/$id/withdraw');
+
+  Future<void> remove(String id) => _api.delete('/campaigns/$id');
 
   Future<void> pause(String id) => _api.patch('/campaigns/$id/pause');
 

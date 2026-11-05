@@ -38,8 +38,8 @@ class SettlementTile extends StatelessWidget {
               children: [
                 Text('Doanh thu gộp: ${formatVnd(s.grossRevenue)}'),
                 Text('${s.voucherCount} voucher'),
-                Text('Hoa hồng: ${formatVnd(s.commissionAmount)}'),
-                Text('Thực nhận: ${formatVnd(s.payableAmount)}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text('Chiết khấu hoa hồng: ${formatVnd(s.commissionAmount)}'),
+                Text('${s.isPaid ? 'Thực nhận' : 'Chờ thanh toán'}: ${formatVnd(s.payableAmount)}', style: const TextStyle(fontWeight: FontWeight.w600)),
                 if (s.isPaid && s.paidAt != null) Text('Chi trả ${formatDateTime(s.paidAt!)} · Mã GD ${s.bankTxnRef ?? '—'}'),
               ],
             ),

@@ -45,6 +45,8 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
   String? _ruleError;
 
   bool get _isEdit => widget.campaign != null;
+  // BR-17: da ban voucher thi khoa gia, gia tri, loai voucher va han su dung
+  bool get _priceLocked => (widget.campaign?.soldQuantity ?? 0) > 0;
 
   @override
   void initState() {
@@ -162,7 +164,14 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
         await service.create(context.read<BrandProvider>().brand!.id, draft);
       }
       if (!mounted) return;
-      showMessage(context, _isEdit ? 'Đã lưu thay đổi.' : 'Đã lưu chiến dịch nháp.');
+      showMessage(
+        context,
+        !_isEdit
+            ? 'Đã lưu chiến dịch nháp.'
+            : widget.campaign!.editNeedsReapproval
+                ? 'Đã lưu. Chiến dịch tạm ẩn và chờ quản trị viên duyệt lại.'
+                : 'Đã lưu thay đổi.',
+      );
       Navigator.pop(context, true);
     } catch (e) {
       if (mounted) setState(() => _ruleError = e.toString());
@@ -189,6 +198,10 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          if (_isEdit && widget.campaign!.editNeedsReapproval)
+                            _notice('Lưu thay đổi sẽ tạm ẩn chiến dịch và gửi quản trị viên duyệt lại. Voucher đã bán không bị ảnh hưởng.', Icons.info_outline),
+                          if (_priceLocked)
+                            _notice('Chiến dịch đã bán voucher nên không sửa được loại voucher, giá, giá trị và hạn sử dụng.', Icons.lock_outline),
                           _section('Thông tin chung'),
                           TextFormField(
                             controller: _title,
@@ -203,7 +216,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                               for (final e in VoucherType.labels.entries)
                                 DropdownMenuItem(value: e.key, child: Text(e.value)),
                             ],
-                            onChanged: (v) => setState(() => _voucherType = v!),
+                            onChanged: _priceLocked ? null : (v) => setState(() => _voucherType = v!),
                           ),
                           const SizedBox(height: AppSpacing.md),
                           TextFormField(controller: _image, decoration: const InputDecoration(labelText: 'Đường dẫn ảnh')),
@@ -223,11 +236,13 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                           _pair(
                             TextFormField(
                               controller: _salePrice,
+                              enabled: !_priceLocked,
                               decoration: const InputDecoration(labelText: 'Giá bán (VND) *'),
                               validator: (v) => validateMoney(v, 'giá bán'),
                             ),
                             TextFormField(
                               controller: _faceValue,
+                              enabled: !_priceLocked,
                               decoration: const InputDecoration(labelText: 'Giá trị voucher (VND) *'),
                               validator: (v) => validateMoney(v, 'giá trị voucher', allowZero: false),
                             ),
@@ -243,12 +258,13 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                                 for (final e in DiscountType.labels.entries)
                                   DropdownMenuItem(value: e.key, child: Text(e.value)),
                               ],
-                              onChanged: (v) => setState(() => _discountType = v!),
+                              onChanged: _priceLocked ? null : (v) => setState(() => _discountType = v!),
                             ),
                             const SizedBox(height: AppSpacing.md),
                             _pair(
                               TextFormField(
                                 controller: _discountValue,
+                                enabled: !_priceLocked,
                                 decoration: InputDecoration(
                                   labelText: _discountType == DiscountType.percent ? 'Phần trăm giảm (1-100) *' : 'Số tiền giảm (VND) *',
                                 ),
@@ -256,7 +272,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                               ),
                               TextFormField(
                                 controller: _maxDiscount,
-                                enabled: _discountType == DiscountType.percent,
+                                enabled: !_priceLocked && _discountType == DiscountType.percent,
                                 decoration: const InputDecoration(labelText: 'Giảm tối đa (VND, bắt buộc khi giảm %)'),
                               ),
                             ),
@@ -281,7 +297,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                             children: [
                               _dateButton('Bắt đầu bán', _saleStart, (d) => _saleStart = d),
                               _dateButton('Kết thúc bán', _saleEnd, (d) => _saleEnd = d),
-                              _dateButton('Hạn sử dụng', _expire, (d) => _expire = d),
+                              _dateButton('Hạn sử dụng', _expire, (d) => _expire = d, enabled: !_priceLocked),
                             ],
                           ),
                           const Padding(
@@ -323,6 +339,18 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
     );
   }
 
+  Widget _notice(String text, IconData icon) => Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.sm),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 18, color: AppColors.textSecondary),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(child: Text(text, style: const TextStyle(color: AppColors.textSecondary))),
+          ],
+        ),
+      );
+
   Widget _section(String text) => Padding(
         padding: const EdgeInsets.only(top: AppSpacing.lg, bottom: AppSpacing.sm),
         child: Text(text, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
@@ -337,8 +365,8 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
               ),
       );
 
-  Widget _dateButton(String label, DateTime? value, ValueChanged<DateTime> onPicked) => OutlinedButton.icon(
-        onPressed: () => _pickDate(value, onPicked),
+  Widget _dateButton(String label, DateTime? value, ValueChanged<DateTime> onPicked, {bool enabled = true}) => OutlinedButton.icon(
+        onPressed: enabled ? () => _pickDate(value, onPicked) : null,
         icon: const Icon(Icons.event),
         label: Text(value == null ? label : '$label: ${value.day}/${value.month}/${value.year}'),
       );
