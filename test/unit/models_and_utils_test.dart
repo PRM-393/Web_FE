@@ -326,7 +326,7 @@ void main() {
       final s = DateTime.utc(2026, 10, 1);
       final e = DateTime.utc(2026, 10, 31);
       final x = DateTime.utc(2026, 11, 30);
-      String? check(String type, {int sale = 50000, int face = 100000, String? dt, int? dv, int? max, String? combo}) =>
+      String? check(String type, {int sale = 50000, int face = 100000, String? dt, int? dv, int? max}) =>
           validateCampaignRules(
             salePrice: sale,
             faceValue: face,
@@ -338,7 +338,6 @@ void main() {
             discountType: dt,
             discountValue: dv,
             maxDiscount: max,
-            comboItems: combo,
           );
 
       test('PREPAID: gia tri phai lon hon gia ban', () {

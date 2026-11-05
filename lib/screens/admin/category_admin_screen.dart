@@ -22,12 +22,15 @@ class _CategoryAdminScreenState extends State<CategoryAdminScreen> {
     _future = service.categories();
   }
 
-  void reload() => setState(() => _future = service.categories());
+  void reload() => setState(() {
+    _future = service.categories();
+  });
   Future<void> edit([Map<String, dynamic>? row]) async {
     final name = await promptTextDialog(
       context,
       title: row == null ? 'Thêm danh mục' : 'Sửa danh mục: ${row['name']}',
       label: 'Tên danh mục',
+      initialValue: row?['name'] as String?,
     );
     if (name == null) return;
     if (name.length > 100) {

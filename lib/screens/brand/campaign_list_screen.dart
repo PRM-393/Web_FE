@@ -234,7 +234,7 @@ class _CampaignTile extends StatelessWidget {
               children: [
                 Text(VoucherType.labels[c.voucherType] ?? c.voucherType),
                 Text(
-                  'Giá bán ${formatVnd(c.salePrice)} · Giá trị ${formatVnd(c.faceValue)}',
+                  c.priceSummary,
                 ),
                 Text(
                   'Đã bán ${c.soldQuantity}/${c.totalQuantity} · Còn ${c.remaining}',

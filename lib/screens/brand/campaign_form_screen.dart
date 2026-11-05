@@ -66,6 +66,12 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
       _saleStart = vnCalendarDay(c.saleStartAt);
       _saleEnd = vnCalendarDay(c.saleEndAt);
       _expire = vnCalendarDay(c.voucherExpireAt);
+    } else {
+      // Chien dich moi: dien san lich hop le (ban ngay hom nay, 30 ngay; han dung 60 ngay), sua duoc neu can
+      final today = vnCalendarDay(DateTime.now());
+      _saleStart = today;
+      _saleEnd = today.add(const Duration(days: 30));
+      _expire = today.add(const Duration(days: 60));
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) context.read<BrandProvider>().ensureLoaded();

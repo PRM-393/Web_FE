@@ -82,7 +82,7 @@ class _CampaignApprovalScreenState extends State<CampaignApprovalScreen> {
                             const SizedBox(height: AppSpacing.xs),
                             Wrap(spacing: AppSpacing.lg, runSpacing: AppSpacing.xs, children: [
                               Text(VoucherType.labels[c.voucherType] ?? c.voucherType),
-                              Text('Giá bán ${formatVnd(c.salePrice)} · Giá trị ${formatVnd(c.faceValue)}'),
+                              Text(c.priceSummary),
                               Text('Số lượng ${c.totalQuantity} · Tối đa ${c.limitPerUser}/người'),
                               Text('Bán ${formatDate(c.saleStartAt)} – ${formatDate(c.saleEndAt)} · HSD ${formatDate(c.voucherExpireAt)}'),
                             ]),

@@ -103,7 +103,6 @@ String? validateCampaignRules({
   String? discountType,
   int? discountValue,
   int? maxDiscount,
-  String? comboItems,
 }) {
   if (salePrice <= 0) return 'Giá bán phải lớn hơn 0';
   if (salePrice >= faceValue) return 'Giá bán phải nhỏ hơn giá trị voucher';
