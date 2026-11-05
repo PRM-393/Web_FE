@@ -289,6 +289,15 @@ class AdminService {
         body: {'gatewayRefundId': gatewayRefundId.trim()},
       );
 
+  // BR-11 / DC-11: tien da nhan cua don khong phat hanh duoc voucher, cho hoan tay
+  Future<List<PendingPaymentRefund>> pendingPaymentRefunds() async =>
+      asList(await _api.get('/refunds/pending-payments'), PendingPaymentRefund.fromJson);
+
+  Future<void> confirmPaymentRefund(String id, String gatewayRefundId) => _api.patch(
+    '/refunds/pending-payments/$id/confirm',
+    body: {'gatewayRefundId': gatewayRefundId.trim()},
+  );
+
   // FR-ENGAGE-05: danh sach danh gia de kiem duyet, loc theo trang thai / thuong hieu, co phan trang
   Future<PageResult<Review>> reviews({
     String? status,

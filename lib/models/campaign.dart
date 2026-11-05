@@ -1,3 +1,4 @@
+import '../utils/format.dart';
 import 'json_utils.dart';
 
 // Vong doi chien dich - SRS 6.1: DRAFT -> PENDING -> APPROVED -> PUBLISHED <-> PAUSED / SOLD_OUT -> ENDED
@@ -19,12 +20,10 @@ class VoucherType {
 
   static const discount = 'DISCOUNT';
   static const prepaid = 'PREPAID';
-  static const combo = 'COMBO';
 
   static const labels = {
     discount: 'Mã giảm giá',
     prepaid: 'Voucher mệnh giá trả trước',
-    combo: 'Combo / gói dịch vụ',
   };
 }
 
@@ -61,7 +60,6 @@ class VoucherCampaign {
     this.discountType,
     this.discountValue,
     this.maxDiscount,
-    this.comboItems,
     this.rejectReason,
   });
 
@@ -86,7 +84,6 @@ class VoucherCampaign {
   final String? discountType;
   final int? discountValue;
   final int? maxDiscount;
-  final String? comboItems;
   final String? rejectReason;
 
   int get remaining => totalQuantity - soldQuantity - reservedQuantity;
@@ -97,11 +94,20 @@ class VoucherCampaign {
   bool get canPause => status == CampaignStatus.published;
   bool get canResume => status == CampaignStatus.paused;
 
+  // Mo ta gia ban va gia tri: ma giam gia hien muc giam (faceValue khong phai gia goc)
+  String get priceSummary {
+    final sale = 'Giá bán ${formatVnd(salePrice)}';
+    if (voucherType != VoucherType.discount || discountValue == null) return '$sale · Giá trị ${formatVnd(faceValue)}';
+    if (discountType != 'PERCENT') return '$sale · Giảm ${formatVnd(discountValue!)}';
+    final cap = maxDiscount != null && maxDiscount! > 0 ? ', tối đa ${formatVnd(maxDiscount!)}' : '';
+    return '$sale · Giảm $discountValue%$cap';
+  }
+
   factory VoucherCampaign.fromJson(Map<String, dynamic> json) => VoucherCampaign(
         id: json['id'] as String,
         brandId: json['brandId'] as String? ?? '',
         title: json['title'] as String? ?? '',
-        voucherType: json['voucherType'] as String? ?? VoucherType.discount,
+        voucherType: json['voucherType'] == VoucherType.discount ? VoucherType.discount : VoucherType.prepaid,
         salePrice: asDouble(json['salePrice']),
         faceValue: asDouble(json['faceValue']),
         totalQuantity: asInt(json['totalQuantity']),
@@ -119,7 +125,6 @@ class VoucherCampaign {
         discountType: json['discountType'] as String?,
         discountValue: json['discountValue'] == null ? null : asInt(json['discountValue']),
         maxDiscount: json['maxDiscount'] == null ? null : asInt(json['maxDiscount']),
-        comboItems: json['comboItems'] as String?,
         rejectReason: json['rejectReason'] as String?,
       );
 }
@@ -143,7 +148,6 @@ class CampaignDraft {
     this.discountType,
     this.discountValue,
     this.maxDiscount,
-    this.comboItems,
   });
 
   final String title;
@@ -162,7 +166,6 @@ class CampaignDraft {
   final String? discountType;
   final int? discountValue;
   final int? maxDiscount;
-  final String? comboItems;
 
   // Thoi gian gui len may chu theo UTC (CON-05); includeStores=false khi sua vi UpdateCampaignDto khong nhan storeIds
   Map<String, dynamic> toJson({bool includeStores = true}) => {
@@ -182,6 +185,5 @@ class CampaignDraft {
         if (discountType != null) 'discountType': discountType,
         if (discountValue != null) 'discountValue': discountValue,
         if (maxDiscount != null) 'maxDiscount': maxDiscount,
-        if (comboItems != null && comboItems!.isNotEmpty) 'comboItems': comboItems,
       };
 }

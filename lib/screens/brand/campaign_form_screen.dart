@@ -29,7 +29,6 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
   late final TextEditingController _faceValue;
   late final TextEditingController _discountValue;
   late final TextEditingController _maxDiscount;
-  late final TextEditingController _comboItems;
   late final TextEditingController _quantity;
   late final TextEditingController _limit;
   late final TextEditingController _image;
@@ -56,18 +55,23 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
     _faceValue = TextEditingController(text: c == null ? '' : c.faceValue.toStringAsFixed(0));
     _discountValue = TextEditingController(text: c?.discountValue?.toString() ?? '');
     _maxDiscount = TextEditingController(text: c?.maxDiscount?.toString() ?? '');
-    _comboItems = TextEditingController(text: c?.comboItems);
     _discountType = c?.discountType ?? DiscountType.percent;
     _quantity = TextEditingController(text: c == null ? '100' : '${c.totalQuantity}');
     _limit = TextEditingController(text: c == null ? '5' : '${c.limitPerUser}');
     _image = TextEditingController(text: c?.image);
     _description = TextEditingController(text: c?.description);
     _terms = TextEditingController(text: c?.terms);
-    _voucherType = c?.voucherType ?? VoucherType.discount;
+    _voucherType = c?.voucherType == VoucherType.prepaid ? VoucherType.prepaid : VoucherType.discount;
     if (c != null) {
       _saleStart = vnCalendarDay(c.saleStartAt);
       _saleEnd = vnCalendarDay(c.saleEndAt);
       _expire = vnCalendarDay(c.voucherExpireAt);
+    } else {
+      // Chien dich moi: dien san lich hop le (ban ngay hom nay, 30 ngay; han dung 60 ngay), sua duoc neu can
+      final today = vnCalendarDay(DateTime.now());
+      _saleStart = today;
+      _saleEnd = today.add(const Duration(days: 30));
+      _expire = today.add(const Duration(days: 60));
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) context.read<BrandProvider>().ensureLoaded();
@@ -82,7 +86,6 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
       _faceValue,
       _discountValue,
       _maxDiscount,
-      _comboItems,
       _quantity,
       _limit,
       _image,
@@ -132,7 +135,6 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
       discountType: isDiscount ? _discountType : null,
       discountValue: isDiscount ? parseMoney(_discountValue.text) : null,
       maxDiscount: isDiscount && _discountType == DiscountType.percent ? parseMoney(_maxDiscount.text) : null,
-      comboItems: _voucherType == VoucherType.combo ? _comboItems.text.trim() : null,
     );
     final ruleError = validateCampaignRules(
       salePrice: draft.salePrice,
@@ -145,7 +147,6 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
       discountType: draft.discountType,
       discountValue: draft.discountValue,
       maxDiscount: draft.maxDiscount,
-      comboItems: draft.comboItems,
     );
     if (ruleError != null) {
       setState(() => _ruleError = ruleError);
@@ -258,15 +259,6 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                                 enabled: _discountType == DiscountType.percent,
                                 decoration: const InputDecoration(labelText: 'Giảm tối đa (VND, bắt buộc khi giảm %)'),
                               ),
-                            ),
-                          ],
-                          if (_voucherType == VoucherType.combo) ...[
-                            const SizedBox(height: AppSpacing.md),
-                            TextFormField(
-                              controller: _comboItems,
-                              maxLines: 2,
-                              decoration: const InputDecoration(labelText: 'Nội dung gói combo *'),
-                              validator: (v) => validateRequired(v, 'nội dung gói'),
                             ),
                           ],
                           const SizedBox(height: AppSpacing.md),

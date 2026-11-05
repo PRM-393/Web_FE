@@ -12,6 +12,7 @@ import '../../widgets/portal_shell.dart';
 // UC-07, FR-REFUND-06: hang doi hoan tien thu cong cua quan tri vien.
 //  - Tab 1: yeu cau hoan tien cong thanh toan khong hoan tu dong duoc -> hoan tay roi xac nhan / bao khong hoan duoc.
 //  - Tab 2: don thanh toan lech so tien -> hoan lai so tien da nhan, don chuyen sang da huy.
+//  - Tab 3: tien den khi voucher da het hang hoac khach tra trung -> hoan lai toan bo khoan tien do.
 // DC-12: tong tien hoan khong vuot so tien da nhan, may chu luon kiem tra lai.
 class RefundAdminScreen extends StatefulWidget {
   const RefundAdminScreen({super.key});
@@ -23,6 +24,7 @@ class RefundAdminScreen extends StatefulWidget {
 class _RefundAdminScreenState extends State<RefundAdminScreen> {
   late Future<List<RefundRequest>> _refunds;
   late Future<List<PaymentMismatchOrder>> _mismatches;
+  late Future<List<PendingPaymentRefund>> _pendingPayments;
   bool _busy = false;
 
   AdminService get _service => context.read<AdminService>();
@@ -32,12 +34,14 @@ class _RefundAdminScreenState extends State<RefundAdminScreen> {
     super.initState();
     _refunds = _service.manualPendingRefunds();
     _mismatches = _service.paymentMismatches();
+    _pendingPayments = _service.pendingPaymentRefunds();
   }
 
   void _reload() {
     setState(() {
       _refunds = _service.manualPendingRefunds();
       _mismatches = _service.paymentMismatches();
+      _pendingPayments = _service.pendingPaymentRefunds();
     });
   }
 
@@ -100,13 +104,24 @@ class _RefundAdminScreenState extends State<RefundAdminScreen> {
     );
   }
 
+  Future<void> _confirmPayment(PendingPaymentRefund p) async {
+    final reference = await promptTextDialog(
+      context,
+      title: 'Xác nhận đã hoàn tiền',
+      message: 'Chỉ xác nhận sau khi đã chuyển ${formatVnd(p.amount)} lại cho khách.',
+      label: 'Mã giao dịch hoàn tiền',
+    );
+    if (reference == null) return;
+    await _guard(() => _service.confirmPaymentRefund(p.id, reference), 'Đã ghi nhận hoàn tiền và báo cho khách.');
+  }
+
   EdgeInsets get _listPadding => const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.lg);
 
   @override
   Widget build(BuildContext context) => PortalShell(
     currentRoute: AppRoutes.adminRefunds,
     child: DefaultTabController(
-      length: 2,
+      length: 3,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -127,6 +142,7 @@ class _RefundAdminScreenState extends State<RefundAdminScreen> {
               tabs: [
                 Tab(text: 'Hoàn tiền thủ công'),
                 Tab(text: 'Đơn lệch số tiền'),
+                Tab(text: 'Hết hàng / trả trùng'),
               ],
             ),
           ),
@@ -161,6 +177,21 @@ class _RefundAdminScreenState extends State<RefundAdminScreen> {
                     itemBuilder: (context, i) => _MismatchCard(
                       order: list[i],
                       onConfirm: _busy ? null : () => _confirmMismatch(list[i]),
+                    ),
+                  ),
+                ),
+                AsyncBody<List<PendingPaymentRefund>>(
+                  future: _pendingPayments,
+                  onRetry: _reload,
+                  isEmpty: (list) => list.isEmpty,
+                  emptyMessage: 'Không có khoản tiền nào đang chờ hoàn.',
+                  builder: (context, list) => ListView.separated(
+                    padding: _listPadding,
+                    itemCount: list.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+                    itemBuilder: (context, i) => _PendingPaymentCard(
+                      payment: list[i],
+                      onConfirm: _busy ? null : () => _confirmPayment(list[i]),
                     ),
                   ),
                 ),
@@ -260,6 +291,50 @@ class _RefundCard extends StatelessWidget {
                   label: const Text('Không hoàn được'),
                 ),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PendingPaymentCard extends StatelessWidget {
+  const _PendingPaymentCard({required this.payment, this.onConfirm});
+
+  final PendingPaymentRefund payment;
+  final VoidCallback? onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = payment;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.currency_exchange, color: AppColors.secondary),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(p.campaignTitle ?? 'Đơn hàng', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                ),
+              ],
+            ),
+            _InfoLine('Lý do', p.reasonLabel),
+            _InfoLine('Số tiền cần hoàn', formatVnd(p.amount), emphasize: true),
+            _InfoLine('Khách hàng', p.customer?.summary ?? 'Không rõ'),
+            if (p.gatewayTxnId != null) _InfoLine('Giao dịch gốc', p.gatewayTxnId!),
+            _InfoLine('Ghi nhận lúc', formatDateTime(p.createdAt)),
+            const SizedBox(height: AppSpacing.sm),
+            FilledButton.icon(
+              key: Key('payment-refund-confirm-${p.id}'),
+              style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
+              onPressed: onConfirm,
+              icon: const Icon(Icons.done_all),
+              label: const Text('Đã hoàn tiền'),
             ),
           ],
         ),

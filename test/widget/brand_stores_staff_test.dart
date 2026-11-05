@@ -120,7 +120,7 @@ void main() {
         '/brands/stores/s1/deactivate',
         (_) => FakeBackend.error(
           400,
-          'Đây là chi nhánh áp dụng cuối cùng còn hoạt động của chiến dịch "Combo trưa" '
+          'Đây là chi nhánh áp dụng cuối cùng còn hoạt động của chiến dịch "Voucher trưa" '
               'và khách vẫn còn voucher chưa dùng. Hãy thêm chi nhánh áp dụng khác cho chiến dịch đó '
               'rồi vô hiệu hóa lại (BR-24).',
         ),
@@ -133,7 +133,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('chi nhánh áp dụng cuối cùng'), findsOneWidget);
-      expect(find.textContaining('Combo trưa'), findsOneWidget);
+      expect(find.textContaining('Voucher trưa'), findsOneWidget);
     });
   });
 

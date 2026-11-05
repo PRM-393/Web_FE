@@ -82,6 +82,7 @@ void main() {
     access = (await step('quan tri: dang nhap', () => auth.login('admin@voucher.local', password)))?.accessToken;
     await step('quan tri: dashboard', () => admin.dashboard());
     await step('quan tri: thuong hieu cho duyet', () => admin.pendingBrands());
+    await step('quan tri: tien cho hoan (het hang / tra trung)', () => admin.pendingPaymentRefunds());
     final active = await step('quan tri: thuong hieu dang hoat dong', () => admin.brandsByStatus('APPROVED'));
     final target = active?.firstWhere((b) => b.name == 'Highlands Coffee');
     await step('quan tri: dinh chi thuong hieu', () async {

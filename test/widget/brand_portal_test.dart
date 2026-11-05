@@ -101,7 +101,7 @@ void main() {
     expect(find.text('Tạo chiến dịch mới'), findsOneWidget);
 
     await tapVisible(tester, find.byKey(const Key('campaign-save')));
-    expect(find.textContaining('Vui lòng chọn đủ ngày'), findsOneWidget);
+    expect(find.text('Vui lòng chọn đủ ngày bắt đầu bán, kết thúc bán và hạn sử dụng'), findsNothing); // chien dich moi co san lich hop le
     expect(backend.called('POST', '/campaigns/brand/b1'), isFalse);
   });
 

@@ -28,7 +28,7 @@ class AuthUser {
       };
 }
 
-// Phan hoi cua /auth/otp/verify, /auth/login, /auth/refresh
+// Phan hoi cua /auth/login, /auth/refresh
 class LoginResponse {
   const LoginResponse({required this.accessToken, required this.refreshToken, required this.user});
 

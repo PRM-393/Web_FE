@@ -54,6 +54,7 @@ void main() {
     );
     backend.on('PATCH', '/refunds/r1/confirm-manual', (_) => {});
     backend.on('GET', '/admin/payment-mismatches', (_) => []);
+    backend.on('GET', '/refunds/pending-payments', (_) => []);
     final (app, _) = await buildTestApp(backend, loggedInAs: Roles.admin);
     await tester.pumpWidget(app);
     await openRoute(tester, AppRoutes.adminRefunds);
