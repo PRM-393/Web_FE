@@ -168,15 +168,47 @@ class _ReportState extends State<_Report> {
                   icon: Icons.confirmation_number_outlined,
                 ),
                 StatCard(
-                  label: 'Doanh thu sau hoàn tiền',
-                  value: formatVnd(r.totalRevenue),
+                  label: 'Doanh thu gộp',
+                  value: formatVnd(r.grossRevenue),
                   icon: Icons.payments_outlined,
                 ),
                 StatCard(
-                  label: 'Đã hoàn tiền',
+                  label: 'Hoàn tiền cho khách',
                   value: formatVnd(r.refundedAmount),
                   icon: Icons.currency_exchange,
                 ),
+                StatCard(
+                  label: 'Doanh thu thuần',
+                  value: formatVnd(r.totalRevenue),
+                  icon: Icons.account_balance_wallet_outlined,
+                ),
+                StatCard(
+                  label: 'Chiết khấu hoa hồng',
+                  value: formatVnd(r.totalCommission),
+                  icon: Icons.percent,
+                ),
+                StatCard(
+                  label: 'Doanh thu sau chiết khấu',
+                  value: formatVnd(r.brandPayable),
+                  icon: Icons.request_quote_outlined,
+                ),
+                StatCard(
+                  label: 'Thực nhận',
+                  value: formatVnd(r.brandPaid),
+                  icon: Icons.task_alt,
+                ),
+                StatCard(
+                  label: 'Chờ thanh toán',
+                  value: formatVnd(r.brandUnpaid),
+                  icon: Icons.pending_actions,
+                ),
+                const SizedBox(
+                    width: double.infinity,
+                    child: Text(
+                      'Doanh thu thuần = Doanh thu gộp − Hoàn tiền. Doanh thu sau chiết khấu = Doanh thu thuần − Chiết khấu hoa hồng. Thực nhận là phần đã được chi trả qua đối soát.',
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    ),
+                  ),
                 StatCard(
                   label: 'Đã sử dụng',
                   value: '${r.totalVoucherUsed}',

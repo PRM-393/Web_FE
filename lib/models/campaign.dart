@@ -89,7 +89,13 @@ class VoucherCampaign {
   int get remaining => totalQuantity - soldQuantity - reservedQuantity;
 
   // Chi sua noi dung khi con nhap (BR-17 khoa gia/han dung khi da ban, kiem tra lai o may chu)
-  bool get canEdit => status == CampaignStatus.draft;
+  // Dang cho duyet phai rut ve nhap moi sua; da ket thuc thi khong sua nua
+  bool get canEdit => status != CampaignStatus.pending && status != CampaignStatus.ended;
+  bool get canWithdraw => status == CampaignStatus.pending;
+  // Sua chien dich da duyet thi phai duyet lai (FR-CAMP-15)
+  bool get editNeedsReapproval => status != CampaignStatus.draft;
+  // Da co don hang thi giu lai de doi soat va hoan tien; may chu kiem tra lan cuoi
+  bool get canDelete => status != CampaignStatus.pending && soldQuantity == 0 && reservedQuantity == 0;
   bool get canSubmit => status == CampaignStatus.draft;
   bool get canPause => status == CampaignStatus.published;
   bool get canResume => status == CampaignStatus.paused;
