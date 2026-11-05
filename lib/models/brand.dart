@@ -206,3 +206,18 @@ class ReviewModeration {
         reviewCount: asInt(json['reviewCount']),
       );
 }
+
+// Ket qua dang ky ho so thuong hieu cong khai (POST /brands/register - FR-BRAND-01/02)
+class BrandRegistration {
+  const BrandRegistration({required this.brandId, required this.status, required this.message});
+
+  final String brandId;
+  final String status;
+  final String message;
+
+  factory BrandRegistration.fromJson(Map<String, dynamic> json) => BrandRegistration(
+        brandId: json['brandId'] as String? ?? '',
+        status: json['status'] as String? ?? BrandStatus.pending,
+        message: json['message'] as String? ?? 'Đã nhận hồ sơ thương hiệu.',
+      );
+}

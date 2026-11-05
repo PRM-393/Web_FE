@@ -82,8 +82,13 @@ class BrandReport {
     this.totalVoucherExpired = 0,
     this.totalVoucherRefunded = 0,
     this.usageRate = 0,
+    this.totalCommission = 0,
+    this.brandPayable = 0,
+    this.brandPaid = 0,
+    this.brandUnpaid = 0,
   });
 
+  final int totalCommission, brandPayable, brandPaid, brandUnpaid;
   final int grossRevenue,
       refundedAmount,
       totalVoucherUsed,
@@ -95,6 +100,10 @@ class BrandReport {
   final int totalRevenue;
 
   factory BrandReport.fromJson(Map<String, dynamic> json) => BrandReport(
+    totalCommission: asInt(json['totalCommission']),
+    brandPayable: asInt(json['brandPayable']),
+    brandPaid: asInt(json['brandPaid']),
+    brandUnpaid: asInt(json['brandUnpaid']),
     grossRevenue: asInt(json['grossRevenue']),
     refundedAmount: asInt(json['refundedAmount']),
     totalVoucherUsed: asInt(json['totalVoucherUsed']),
@@ -115,13 +124,17 @@ class AdminDashboard {
     required this.totalActiveBrands,
     this.totalTransactions = 0,
     this.refundedAmount = 0,
+    this.grossRevenue = 0,
+    this.brandPayable = 0,
+    this.brandPaid = 0,
+    this.brandUnpaid = 0,
     this.transactionsByDay = const [],
   });
 
   final int totalRevenue;
   final int totalCommission;
   final int totalActiveBrands;
-  final int totalTransactions, refundedAmount;
+  final int totalTransactions, refundedAmount, grossRevenue, brandPayable, brandPaid, brandUnpaid;
   final List<Map<String, dynamic>> transactionsByDay;
 
   factory AdminDashboard.fromJson(Map<String, dynamic> json) => AdminDashboard(
@@ -130,6 +143,10 @@ class AdminDashboard {
     totalActiveBrands: asInt(json['totalActiveBrands']),
     totalTransactions: asInt(json['totalTransactions']),
     refundedAmount: asInt(json['refundedAmount']),
+    grossRevenue: asInt(json['grossRevenue']),
+    brandPayable: asInt(json['brandPayable']),
+    brandPaid: asInt(json['brandPaid']),
+    brandUnpaid: asInt(json['brandUnpaid']),
     transactionsByDay: (json['transactionsByDay'] as List? ?? [])
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList(),

@@ -11,6 +11,7 @@ import 'screens/admin/commission_config_screen.dart';
 import 'screens/admin/refund_admin_screen.dart';
 import 'screens/admin/review_moderation_screen.dart';
 import 'screens/admin/settlement_admin_screen.dart';
+import 'screens/auth/brand_register_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/brand/brand_profile_screen.dart';
 import 'screens/brand/campaign_form_screen.dart';
@@ -33,6 +34,8 @@ class AppRoutes {
 
   static const root = '/';
   static const login = '/login';
+  // FR-BRAND-01: cua vao cong khai cho doanh nghiep chua co tai khoan
+  static const registerBrand = '/register-brand';
   static const activate = '/activate';
   static const resetPassword = '/reset-password';
   static const adminCategories = '/admin/categories';
@@ -86,6 +89,8 @@ class AppRoutes {
     final Widget page;
     if (name == activate || name == resetPassword) {
       page = AccountRecoveryScreen(activation: name == activate, email: uri.queryParameters['email'] ?? '', token: uri.queryParameters['token']);
+    } else if (name == registerBrand) {
+      page = auth.isLoggedIn ? _pageFor(homeOf(auth.role), null) : const BrandRegisterScreen();
     } else if (name == root) {
       page = auth.isLoggedIn ? _pageFor(homeOf(auth.role), null) : const LoginScreen();
     } else if (name == login) {

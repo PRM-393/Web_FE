@@ -78,6 +78,26 @@ class _CampaignListState extends State<_CampaignList> {
     if (ok) await _run(() => _service.submit(c.id), 'Đã gửi duyệt chiến dịch.');
   }
 
+  Future<void> _withdraw(VoucherCampaign c) async {
+    final ok = await confirmDialog(
+      context,
+      title: 'Rút về nháp',
+      message: 'Rút "${c.title}" khỏi hàng chờ duyệt để sửa lại?',
+      confirm: 'Rút về nháp',
+    );
+    if (ok) await _run(() => _service.withdraw(c.id), 'Đã rút chiến dịch về nháp.');
+  }
+
+  Future<void> _delete(VoucherCampaign c) async {
+    final ok = await confirmDialog(
+      context,
+      title: 'Xóa chiến dịch',
+      message: 'Xóa vĩnh viễn "${c.title}"? Thao tác này không thể hoàn tác.',
+      confirm: 'Xóa',
+    );
+    if (ok) await _run(() => _service.remove(c.id), 'Đã xóa chiến dịch.');
+  }
+
   Future<void> _pause(VoucherCampaign c) async {
     final ok = await confirmDialog(
       context,
@@ -135,6 +155,8 @@ class _CampaignListState extends State<_CampaignList> {
               onEdit: () => _openForm(campaigns[i]),
               onSubmit: () => _submit(campaigns[i]),
               onPause: () => _pause(campaigns[i]),
+              onWithdraw: () => _withdraw(campaigns[i]),
+              onDelete: () => _delete(campaigns[i]),
               onResume: () => _run(
                 () => _service.resume(campaigns[i].id),
                 'Đã mở bán lại chiến dịch.',
@@ -154,6 +176,8 @@ class _CampaignTile extends StatelessWidget {
     required this.onEdit,
     required this.onSubmit,
     required this.onPause,
+    required this.onWithdraw,
+    required this.onDelete,
     required this.onResume,
   });
 
@@ -162,6 +186,8 @@ class _CampaignTile extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onSubmit;
   final VoidCallback onPause;
+  final VoidCallback onWithdraw;
+  final VoidCallback onDelete;
   final VoidCallback onResume;
 
   @override
@@ -276,6 +302,13 @@ class _CampaignTile extends StatelessWidget {
                     icon: const Icon(Icons.edit),
                     label: const Text('Sửa'),
                   ),
+                if (c.canWithdraw)
+                  OutlinedButton.icon(
+                    key: Key('campaign-withdraw-${c.id}'),
+                    onPressed: onWithdraw,
+                    icon: const Icon(Icons.undo),
+                    label: const Text('Rút về nháp'),
+                  ),
                 if (c.canSubmit)
                   FilledButton.tonalIcon(
                     onPressed: canSubmit ? onSubmit : null,
@@ -293,6 +326,14 @@ class _CampaignTile extends StatelessWidget {
                     onPressed: onResume,
                     icon: const Icon(Icons.play_arrow),
                     label: const Text('Bán lại'),
+                  ),
+                if (c.canDelete)
+                  OutlinedButton.icon(
+                    key: Key('campaign-delete-${c.id}'),
+                    onPressed: onDelete,
+                    style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Xóa'),
                   ),
               ],
             ),

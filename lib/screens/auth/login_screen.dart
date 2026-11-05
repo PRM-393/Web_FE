@@ -216,6 +216,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 )
               : const Text('Đăng nhập'),
         ),
+        const SizedBox(height: AppSpacing.sm),
+        OutlinedButton.icon(
+          key: const Key('login-register-brand'),
+          onPressed: () => AppRoutes.go(context, AppRoutes.registerBrand),
+          icon: const Icon(Icons.storefront_outlined),
+          label: const Text('Đăng ký thương hiệu'),
+        ),
         const SizedBox(height: AppSpacing.md),
         Wrap(spacing: 8, children: [TextButton(onPressed: () => AppRoutes.go(context, AppRoutes.resetPassword), child: const Text('Quên mật khẩu?')), TextButton(onPressed: () => AppRoutes.go(context, AppRoutes.activate), child: const Text('Kích hoạt tài khoản'))]),
         const Text(
